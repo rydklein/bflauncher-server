@@ -1,0 +1,12 @@
+diff --git a/node_modules/@types/express-session/index.d.ts b/node_modules/@types/express-session/index.d.ts
+index 02a9523..b7f9b64 100644
+--- a/node_modules/@types/express-session/index.d.ts
++++ b/node_modules/@types/express-session/index.d.ts
+@@ -211,6 +211,7 @@ declare namespace session {
+      *
+      */
+     interface SessionData {
++        [key: string]: any;
+         cookie: Cookie;
+     }
+ 

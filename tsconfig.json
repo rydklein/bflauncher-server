@@ -1,0 +1,12 @@
+{
+    "extends": "@tsconfig/recommended/tsconfig.json",
+    "compilerOptions": {
+        "noImplicitAny": false,
+        "resolveJsonModule": true,
+        "downlevelIteration": true,
+        "esModuleInterop":true
+    },
+    "files": [
+        "./server.ts"
+    ]
+}   

@@ -1,0 +1,81 @@
+<html>
+
+<head>
+    <title>Seeder Control Panel</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/main.js"></script>
+    <style>
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+            margin-bottom: 5px;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding-left: 15px;
+            padding-right: 15px;
+        }
+
+        td:first-child,
+        th:first-child {
+            padding-left: 0;
+        }
+
+        td:last-child,
+        th:last-child {
+            padding-right: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div>
+        <h1>Seeder Control Panel</h1>
+        <i>CSS wasn't in the budget. Sorry.</i><br>
+        <b>You're logged in as: </b>
+        <%= `${discordUser.username}#${discordUser.discriminator}` %>
+    </div>
+    <div>
+        <h4>Current Status</h4>
+        <span id="currentlyTargeting" hidden=true>Currently Targeting:<br></span>
+        <b><span id="targetName">Loading...</span></b>
+        <a id="targetLink" hidden=true><br>Loading...<br></a>
+        <br>
+        <span id="targetAuthor">Loading...</span>
+    </div>
+    <div>
+        <h4>Seeder Control</h4>
+        Please enter the server GUID to seed.<br>
+        <input type="text" id="serverGUID" placeholder="Server GUID" onkeypress="return event.keyCode != 13;">
+        <button id="guidSubmit" onclick="submitGUIDChange()">Submit</button><button id="disconnect"
+            onclick="disconnectFromServer()">Disconnect</button><br>
+        <span id="guidChangeStatus" hidden=true></span>
+    </div>
+    <h4>Seeder Clients</h4>
+    <table id="seeders">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Last Update</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+        </div>
+        <div style="position: absolute; bottom: 5px;">
+            Made with <span style="text-decoration: line-through;">toleration</span> love by BadPylot.
+            <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">Source Code</a>
+        </div>
+</body>
+
+</html>
