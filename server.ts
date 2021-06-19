@@ -30,6 +30,7 @@ type ServerData = {
 //#endregion
 // Global Variables
 const config = JSON.parse(fs.readFileSync("./config.json", {"encoding":"utf-8"}));
+const guidRegex = new RegExp("^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$");
 const webInterface = express();
 const httpsServer = https.createServer({
     key: fs.readFileSync("cert.key"),
@@ -91,7 +92,7 @@ webInterface.get("/login", (req, res) => {
     // Redirecting to login url
     res.redirect(oAuthLoginUrl);
 });
-webInterface.get("/main.js", async (req,res) => {
+webInterface.get("/assets/main.js", async (req,res) => {
     const userData = checkPermissions(req.session);
     if (userData === PermissionState.NOT_LOGGED_IN) return res.redirect("/login");
     if (userData === PermissionState.NOT_AUTHORIZED) return res.status(403).send();
@@ -104,13 +105,21 @@ class Websockets {
     private io:socket.Server;
     private frontEnd:socket.Namespace;
     private backEnd:socket.Namespace;
-    public seeders: Map<string, SeederStorage> = new Map();
-    public currentTarget:ServerData = {
-        "name":null,
-        "guid":null,
-        "user":"System",
-        "timestamp":new Date().getTime(),
-    };
+    public seeders: Map<string, Record<string, SeederStorage>> = new Map();
+    public currentTarget:Record<string, ServerData> = {
+        "BF4": {
+            "name":null,
+            "guid":null,
+            "user":"System",
+            "timestamp":new Date().getTime(),
+        },
+        "BF1": {
+            "name":null,
+            "guid":null,
+            "user":"System",
+            "timestamp":new Date().getTime(),
+        },
+    }
     constructor(webServer:https.Server, authMiddleware:express.RequestHandler, checkPerms:any, clientToken:string) {
         this.io = new socket.Server(webServer);
         this.frontEnd = this.io.of("/ws/web");
@@ -122,9 +131,7 @@ class Websockets {
         // When a client connects, authenticate then set listeners for it.
         this.frontEnd.on("connection", (socket) => {
             const socketSession = socket.request["session"] as ExpressSession.Session & Partial<ExpressSession.SessionData>;
-            if(checkPerms(socketSession) !== PermissionState.SUCCESS) {
-                socket.disconnect(true);
-            }
+            if(checkPerms(socketSession) !== PermissionState.SUCCESS) return socket.disconnect(true);
             this.registerEventsFrontend(socket);
         });
         this.backEnd.on("connection", async (socket) => {
@@ -135,78 +142,127 @@ class Websockets {
     // Register events; called when sockets connect.
     private registerEventsFrontend(socket:socket.Socket) {
         socket.on("getSeeders", (callback) => {
+            if (typeof callback !== "function") return;
             callback(JSON.stringify(this.seeders, Websockets.mapReplacer));
         });
-        socket.on("setTarget", async (targetGUID, callback) => {
-            const success = await this.verifyAndSetTarget(targetGUID, `${socket.request["session"].discordUser.username}#${socket.request["session"].discordUser.discriminator}`);
+        socket.on("setTarget", async (game, newTarget:string, callback) => {
+            if (typeof callback !== "function") return;
+            const success = await this.verifyAndSetTarget(game, newTarget, `${socket.request["session"].discordUser.username}#${socket.request["session"].discordUser.discriminator}`);
             callback(success);
         });
+        // No option for game selector since the only time this endpoint is used
+        // Is when initializing the website, and both will be needed.
         socket.on("getTarget", (callback) => {
+            if (typeof callback !== "function") return;
             callback(this.currentTarget);
         });
     }
     private registerEventsBackend(socket:socket.Socket) {
         socket.on("gameStateUpdate", (newState:string) => {
-            this.updateSeederDisplay(socket.handshake.auth.hostname, newState);
+            this.updateSeederDisplay(socket.handshake.auth.hostname, "BF4", newState);
+        });
+        socket.on("oneStateUpdate", (newState:string) => {
+            this.updateSeederDisplay(socket.handshake.auth.hostname, "BF1", newState);
         });
         socket.on("getTarget", (callback) => {
+            if (typeof callback !== "function") return;
             callback(this.currentTarget);
         });
         socket.on("disconnect", () => {
-            this.updateSeederDisplay(socket.handshake.auth.hostname, null);
+            this.updateSeederDisplay(socket.handshake.auth.hostname, null, null);
         });
     }
     // Verify target is real, and then set it. Returns true if successful, false if not.
-    public async verifyAndSetTarget(newTarget:string | null, author?:string):Promise<boolean> {
+    public async verifyAndSetTarget(game:string, newTarget:string | null, author?:string):Promise<boolean> {
         author = author || "System";
-        let newTargetReq;
-        if (newTarget) {
-            newTargetReq = await (await fetch(`https://battlelog.battlefield.com/bf4/servers/show/PC/${newTarget}`, {
-                "headers": {
-                    "User-Agent": "Mozilla/5.0 SeederManager",
-                    "Accept": "*/*",
-                    "X-AjaxNavigation": "1",
-                    "X-Requested-With": "XMLHttpRequest",
-                },
-                "method": "GET",
-            })).json();
-            if (newTargetReq.template === "errorpages.error404") {
-                return false;
+        if (game === "BF4") {
+            let newTargetReq;
+            if (newTarget) {
+                if (!guidRegex.test(newTarget)) {
+                    return false;
+                }
+                newTargetReq = await (await fetch(`https://battlelog.battlefield.com/bf4/servers/show/PC/${newTarget}`, {
+                    "headers": {
+                        "User-Agent": "Mozilla/5.0 SeederManager",
+                        "Accept": "*/*",
+                        "X-AjaxNavigation": "1",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    "method": "GET",
+                })).json();
+                if (newTargetReq.template === "errorpages.error404") {
+                    return false;
+                }
             }
+            const newTargetObj:ServerData = {
+                "name": newTargetReq ? newTargetReq.context.server.name : null,
+                "guid":newTarget,
+                "user":author,
+                "timestamp":new Date().getTime(),
+            };
+            this.setTarget("BF4", newTargetObj);
+            return true;
         }
-        const newTargetObj:ServerData = {
-            "name": newTargetReq ? newTargetReq.context.server.name : null,
-            "guid":newTarget,
-            "user":author,
-            "timestamp":new Date().getTime(),
-        };
-        this.setTarget(newTargetObj);
-        return true;
+        if (game === "BF1") {
+            let newTargetReq;
+            if (newTarget) {
+                // Make sure gameid is length 13 and a number
+                if (!((newTarget.length === 13) && !(isNaN(parseInt(newTarget))))) return false;
+                newTargetReq = await (await fetch(`https://api.gametools.network/bf1/detailedserver/?gameid=${newTarget}&lang=en-us&platform=pc`, {
+                    "headers": {
+                        "User-Agent": "Mozilla/5.0 SeederManager",
+                        "Accept": "application/json",
+                    },
+                    "method": "GET",
+                })).json();
+                if (newTargetReq.error) {
+                    return false;
+                }
+            }
+            const newTargetObj:ServerData = {
+                "name": newTargetReq ? newTargetReq.prefix : null,
+                "guid":newTarget,
+                "user":author,
+                "timestamp":new Date().getTime(),
+            };
+            this.setTarget("BF1", newTargetObj);
+            return true;
+        }
+        return false;
     }
     // Set target, without any kind of verification.
-    private setTarget(newTarget:ServerData) {
-        if (this.currentTarget.guid === newTarget.guid) return;
-        this.currentTarget = newTarget;
-        this.frontEnd.emit("newTarget", newTarget);
-        this.backEnd.emit("newTarget", newTarget);
+    private setTarget(game: string, newTarget:ServerData) {
+        if (this.currentTarget[game].guid === newTarget.guid) return;
+        this.currentTarget[game] = newTarget;
+        this.frontEnd.emit("newTarget", game, newTarget);
+        this.backEnd.emit("newTarget", game, newTarget);
     }
-    private updateSeederDisplay(hostname:string, newState:string | null) {
-        if(!newState) {
+    private updateSeederDisplay(hostname:string, game:string | null, newState:string | null) {
+        let newSeederState;
+        if(!(game && newState)) {
             this.seeders.delete(hostname);
         } else {
             const seederData:SeederStorage = {
                 "state":newState,
                 "timestamp":Date.now(),
             };  
-            this.seeders.set(hostname, seederData);
+            newSeederState = this.seeders.get(hostname);
+            if (!newSeederState) {
+                newSeederState = {
+                    [game]: seederData,
+                };
+            } else {
+                newSeederState[game] = seederData;
+            }
+            this.seeders.set(hostname, newSeederState);
         }
-        this.frontEnd.emit("seederUpdate", hostname, newState);
+        this.frontEnd.emit("seederUpdate", hostname, game, newState);
     }
     public static mapReplacer(key, value) {
         if(value instanceof Map) {
             return {
                 dataType: "Map",
-                value: Array.from(value.entries()), // or with spread: value: [...value]
+                value: Array.from(value.entries()),
             };
         } else {
             return value;

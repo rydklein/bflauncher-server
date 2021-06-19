@@ -3,7 +3,7 @@
 <head>
     <title>Seeder Control Panel</title>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/main.js"></script>
+    <script src="/assets/main.js"></script>
     <style>
         h1,
         h2,
@@ -12,6 +12,11 @@
         h5,
         h6 {
             margin-bottom: 5px;
+        }
+
+        .noGap {
+            margin-top: 0px;
+            margin-bottom: 0px;
         }
 
         tr:nth-child(even) {
@@ -44,18 +49,36 @@
         <b>You're logged in as: </b>
         <%= `${discordUser.username}#${discordUser.discriminator}` %>
     </div>
+    <br>
     <div>
-        <h4>Current Status</h4>
-        <span id="currentlyTargeting" hidden=true>Currently Targeting:<br></span>
-        <b><span id="targetName">Loading...</span></b>
-        <a id="targetLink" hidden=true><br>Loading...<br></a>
-        <br>
-        <span id="targetAuthor">Loading...</span>
+        <div id="BF4Status">
+            <h3 class="noGap">Battlefield 4</h3>
+            <b><span id="targetName">Loading...</span></b><br>
+            <span id=targetLinkSpan hidden=true>
+                Game ID: <a id="targetLink">Loading...</a>
+                <br>
+            </span>
+            <span id="targetAuthor">Loading...</span>
+        </div>
+        <div id="BF1Status">
+            <h3 class="noGap">Battlefield 1</h3>
+            <b><span id="targetName">Loading...</span></b><br>
+            <span id=targetLinkSpan hidden=true>
+                Game ID: <a id="targetLink">Loading...</a>
+                <br>
+            </span>
+            <span id="targetAuthor">Loading...</span>
+        </div>
     </div>
     <div>
-        <h4>Seeder Control</h4>
-        Please enter the server GUID to seed.<br>
-        <input type="text" id="serverGUID" placeholder="Server GUID" onkeypress="return event.keyCode != 13;">
+        <h3>Control</h3>
+        Please enter the <span id="idiotInstructions">Server GUID</span> to seed.<br>
+        <input type="text" id="serverGUID" placeholder="Server GUID" onkeypress="return event.keyCode != 13;"> <select
+            id="game" name="game" onchange="gameListener()">
+            <option selected value="BF4">BF4</option>
+            <option value="BF1">BF1</option>
+        </select>
+        <br>
         <button id="guidSubmit" onclick="submitGUIDChange()">Submit</button><button id="disconnect"
             onclick="disconnectFromServer()">Disconnect</button><br>
         <span id="guidChangeStatus" hidden=true></span>
@@ -65,7 +88,8 @@
         <thead>
             <tr>
                 <th>Name</th>
-                <th>Status</th>
+                <th>Status (BF4)</th>
+                <th>Status (BF1)</th>
                 <th>Last Update</th>
             </tr>
         </thead>
@@ -73,8 +97,8 @@
         </tbody>
         </div>
         <div style="position: absolute; bottom: 5px;">
-            Made with <span style="text-decoration: line-through;">toleration</span> love by BadPylot.
-            <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">Source Code</a>
+            Made with <span style="text-decoration: line-through;">toleration</span> love by BadPylot.<br>
+            Big thanks to PolloLoco for finding the command line flags used to launch BF1 to a server.
         </div>
 </body>
 
