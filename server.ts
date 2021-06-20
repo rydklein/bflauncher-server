@@ -1,5 +1,5 @@
 // Imports
-import https from "https";
+import http from "http";
 import express from "express";
 import ejs from "ejs";
 import "colors";
@@ -29,15 +29,12 @@ type ServerData = {
 
 //#endregion
 // Global Variables
-const config = JSON.parse(fs.readFileSync("./config.json", {"encoding":"utf-8"}));
+const config = JSON.parse(fs.readFileSync("./config/config.json", {"encoding":"utf-8"}));
 const guidRegex = new RegExp("^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$");
 const webInterface = express();
-const httpsServer = https.createServer({
-    key: fs.readFileSync("cert.key"),
-    cert: fs.readFileSync("cert.pem"),
-}, webInterface);
+const httpServer = http.createServer(webInterface);
 // #region Startup
-const usersPath = "./users.json";
+const usersPath = "./config/users.json";
 let users: Array<string> = JSON.parse(fs.readFileSync(usersPath, {"encoding":"utf-8"}));
 // #endregion
 // #region Client <-> Server
@@ -51,7 +48,7 @@ const sessionConfig = {
     "saveUninitialized": false,
     "cookie": {
         "maxAge": 86400000,
-        "secure": true,
+        "secure": false,
     },
 };
 const sessionMiddleware = ExpressSession(sessionConfig);
@@ -84,7 +81,6 @@ webInterface.get("/login/callback", async (req, res) => {
     const oAuthRes = await (await fetch("https://discord.com/api/oauth2/token", {method: "POST", body: data})).json();
     req.session.bearer_token = oAuthRes.access_token;
     req.session.discordUser = await (await fetch("https://discord.com/api/users/@me", {headers: { Authorization: `Bearer ${req.session.bearer_token}` } })).json();
-
     res.redirect("/"); // Redirecting to main page
 });
 
@@ -120,7 +116,7 @@ class Websockets {
             "timestamp":new Date().getTime(),
         },
     }
-    constructor(webServer:https.Server, authMiddleware:express.RequestHandler, checkPerms:any, clientToken:string) {
+    constructor(webServer:http.Server, authMiddleware:express.RequestHandler, checkPerms:any, clientToken:string) {
         this.io = new socket.Server(webServer);
         this.frontEnd = this.io.of("/ws/web");
         this.backEnd = this.io.of("/ws/seeder");
@@ -288,10 +284,11 @@ function checkPermissions(session:ExpressSession.Session & Partial<ExpressSessio
 }
 // #endregion
 // #region Watchers
-fs.watch("./users.json", async () => {
-    users = JSON.parse(await fs.promises.readFile(usersPath, {"encoding":"utf-8"}));
+fs.watch(usersPath, async () => {
+    const usersFile = await fs.promises.readFile(usersPath, {"encoding":"utf-8"});
+    users = JSON.parse(usersFile);
 });
 // #endregion
-new Websockets(httpsServer, sessionMiddleware, checkPermissions, config.clientToken);
-httpsServer.listen(config.webPort);
-console.log(`Secure WebServer listening on port ${config.webPort}`);
+new Websockets(httpServer, sessionMiddleware, checkPermissions, config.clientToken);
+httpServer.listen(config.webPort);
+console.log(`WebServer listening on port ${config.webPort}`);

@@ -13,22 +13,25 @@ socket.emit("getSeeders", (seedersRaw) => {
     seeders = JSON.parse(seedersRaw, mapReviver);
     const table = document.getElementById("seeders");
     for (const [mapKey, mapValue] of seeders) {
-        addSeederRow(table, mapKey, {
-            "BF4":mapValue.BF4 || null,
-            "BF1":mapValue.BF1 || null,
+        const seederData = {
+            "BF4":mapValue.BF4.state || null,
+            "BF1":mapValue.BF1.state || null,
             "timestamp":Date.now(),
-        });
+        };
+        addSeederRow(table, mapKey, seederData, Math.max(mapValue.BF4.timestamp, mapValue.BF1.timestamp));
     }
 });
 socket.on("seederUpdate", (hostname, game, newSeeder) => {
     const seederRow = document.getElementById(hostname);
     if (!seederRow) {
+        const table = document.getElementById("seeders");
+        const seederObj = {
+            "BF4": (game === "BF4") ? newSeeder : null,
+            "BF1": (game === "BF1") ? newSeeder : null,
+            "timestamp":Date.now(),
+        };
         if (newSeeder) {
-            addSeederRow(document.getElementById("seeders"), hostname, {
-                "BF4":game === "BF4" ? newSeeder : null,
-                "BF1":game === "BF1" ? newSeeder : null,
-                "timestamp":Date.now(),
-            });
+            addSeederRow(table, hostname, seederObj, new Date().getTime());
         }
         return;
     }
@@ -41,7 +44,7 @@ socket.on("seederUpdate", (hostname, game, newSeeder) => {
     }
     seederRow.cells[3].innerText = new Date().toLocaleTimeString("en-us");
 });
-function addSeederRow(table, seederName, seederData) {
+function addSeederRow(table, seederName, seederData, timestamp) {
     const row = table.insertRow();
     row.id = `${seederName}`;
     // Name
@@ -52,7 +55,7 @@ function addSeederRow(table, seederName, seederData) {
     const seederStatusBF4C = row.insertCell();
     let seederStatusBF4T;
     if (seederData["BF4"]) {
-        seederStatusBF4T = document.createTextNode(seederData["BF4"]["state"]);
+        seederStatusBF4T = document.createTextNode(seederData["BF4"]);
     } else {
         seederStatusBF4T = document.createTextNode("UNOWNED");
     }
@@ -61,14 +64,14 @@ function addSeederRow(table, seederName, seederData) {
     const seederStatusBF1C = row.insertCell();
     let seederStatusBF1T;
     if (seederData["BF1"]) {
-        seederStatusBF1T = document.createTextNode(seederData["BF1"]["state"]);
+        seederStatusBF1T = document.createTextNode(seederData["BF1"]);
     } else {
         seederStatusBF1T = document.createTextNode("UNOWNED");
     }
     seederStatusBF1C.appendChild(seederStatusBF1T);
     // Timestamp
     const seederTimeC = row.insertCell();
-    const seederTimeT = document.createTextNode(new Date(seederData["timestamp"]).toLocaleTimeString("en-us"));
+    const seederTimeT = document.createTextNode(new Date(timestamp).toLocaleTimeString("en-us"));
     seederTimeC.appendChild(seederTimeT);
 }
 // #endregion
@@ -88,7 +91,8 @@ function updateTarget(game, newTarget) {
     const targetLink = parentDiv.querySelector("#targetLink");
     const targetLinkSpan = parentDiv.querySelector("#targetLinkSpan");
     const targetAuthor = parentDiv.querySelector("#targetAuthor");
-    const setBy = `Set by ${newTarget.user} at ${new Date(newTarget.timestamp).toLocaleTimeString()}.`;
+    const timestampDate = new Date(newTarget.timestamp);
+    const setBy = `Set by ${newTarget.user} on ${timestampDate.toLocaleDateString()} at ${timestampDate.toLocaleTimeString()}.`;
     if(!newTarget.guid) {
         targetNameSpan.innerText = "Not currently in-game.";
         targetLinkSpan.hidden = true;
