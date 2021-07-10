@@ -47,7 +47,7 @@
         <h1>Seeder Control Panel</h1>
         <i>CSS wasn't in the budget. Sorry.</i><br>
         <b>You're logged in as: </b>
-        <%= `${discordUser.username}#${discordUser.discriminator}` %>
+        <%= `${discordUser.username}#${discordUser.discriminator}` %><br>
     </div>
     <br>
     <div>
@@ -83,6 +83,15 @@
             onclick="disconnectFromServer()">Disconnect</button><br>
         <span id="guidChangeStatus" hidden=true></span>
     </div>
+    <div>
+        <br>
+        <a href="https://battlelog.battlefield.com/bf4/servers/pc/">BF4 Server GUIDs</a><br>
+        Find your server, click on it, find "VIEW FULL SERVER PAGE," the server GUID is in the URL.<br>
+        https://battlelog.battlefield.com/bf4/servers/show/pc/<b style="color: green">c63320eb-e4c5-46fa-a9a1-ebe6f2a4f393</b>/Salt-vs-Beefy/<br>
+        <br>
+        <a href="https://gametools.network/servers?game=bf1&region=all&platform=pc">BF1 Server IDs</a><br>
+        Search for your server, click on it, the server id is in the URL.<br>https://gametools.network/servers/bf1/gameid/<b style="color: green">5462554500815</b>/pc
+    </div>
     <h4>Seeder Clients</h4>
     <table id="seeders">
         <thead>
@@ -96,10 +105,12 @@
         <tbody>
         </tbody>
         </div>
-        <div style="position: absolute; bottom: 5px;">
-            Made with <span style="text-decoration: line-through;">toleration</span> love by BadPylot.<br>
-            Big thanks to PolloLoco for finding the command line flags used to launch BF1 to a server.
-        </div>
+    </table>
+    <div style="position: absolute; bottom: 5px;">
+        Made with <span style="text-decoration: line-through;">toleration</span> love by <a
+            href="https://github.com/BadPylot">BadPylot</a>.<br>
+        Big thanks to PolloLoco for finding the command line flags needed to properly launch the game.
+    </div>
 </body>
 
 </html>

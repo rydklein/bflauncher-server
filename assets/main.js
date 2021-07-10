@@ -4,6 +4,7 @@ const socket = io("/ws/web");
 const guidRegex = new RegExp("^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$");
 let statusTimeout;
 let currentTarget;
+let oldInput = "";
 document.addEventListener("DOMContentLoaded", function() {
     gameListener();
 }, false);
@@ -13,12 +14,14 @@ socket.emit("getSeeders", (seedersRaw) => {
     seeders = JSON.parse(seedersRaw, mapReviver);
     const table = document.getElementById("seeders");
     for (const [mapKey, mapValue] of seeders) {
+        const seederBF4 = mapValue.BF4 || {};
+        const seederBF1 = mapValue.BF1 || {};
         const seederData = {
-            "BF4":mapValue.BF4.state || null,
-            "BF1":mapValue.BF1.state || null,
-            "timestamp":Date.now(),
+            "BF4":seederBF4.state || null,
+            "BF1":seederBF1.state || null,
         };
-        addSeederRow(table, mapKey, seederData, Math.max(mapValue.BF4.timestamp, mapValue.BF1.timestamp));
+        const seederTimestamp = isNaN(Math.max(seederBF4.timestamp, seederBF1.timestamp)) ? (seederBF4.timestamp ? seederBF4.timestamp : seederBF1.timestamp) : Math.max(seederBF4.timestamp, seederBF1.timestamp);
+        addSeederRow(table, mapKey, seederData, seederTimestamp);
     }
 });
 socket.on("seederUpdate", (hostname, game, newSeeder) => {
@@ -28,7 +31,6 @@ socket.on("seederUpdate", (hostname, game, newSeeder) => {
         const seederObj = {
             "BF4": (game === "BF4") ? newSeeder : null,
             "BF1": (game === "BF1") ? newSeeder : null,
-            "timestamp":Date.now(),
         };
         if (newSeeder) {
             addSeederRow(table, hostname, seederObj, new Date().getTime());
@@ -181,6 +183,7 @@ function disconnectFromServer() {
 }
 function gameListener() {
     const guidInput = document.getElementById("serverGUID");
+    const oldInputTemp = guidInput.value;
     const bf4ServerIdentifier = "Server GUID";
     const bf1ServerIdentifier = "Game ID";
     const idiotInstructions = document.getElementById("idiotInstructions");
@@ -193,6 +196,8 @@ function gameListener() {
         guidInput.placeholder = bf1ServerIdentifier;
         idiotInstructions.innerText = bf1ServerIdentifier;
     }
+    guidInput.value = oldInput;
+    oldInput = oldInputTemp;
 }
 // #endregion
 // #region Helpers

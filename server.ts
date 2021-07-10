@@ -101,6 +101,7 @@ class Websockets {
     private io:socket.Server;
     private frontEnd:socket.Namespace;
     private backEnd:socket.Namespace;
+    private clientSockets: Array<socket.Socket> = [];
     public seeders: Map<string, Record<string, SeederStorage>> = new Map();
     public currentTarget:Record<string, ServerData> = {
         "BF4": {
@@ -154,17 +155,18 @@ class Websockets {
         });
     }
     private registerEventsBackend(socket:socket.Socket) {
-        socket.on("gameStateUpdate", (newState:string) => {
-            this.updateSeederDisplay(socket.handshake.auth.hostname, "BF4", newState);
-        });
-        socket.on("oneStateUpdate", (newState:string) => {
-            this.updateSeederDisplay(socket.handshake.auth.hostname, "BF1", newState);
+        socket.on("gameStateUpdate", (game: string, newState:string) => {
+            if (game === "BF4") {
+                this.updateSeederDisplay(socket.handshake.auth.hostname, "BF4", newState);
+            } else if (game === "BF1") {
+                this.updateSeederDisplay(socket.handshake.auth.hostname, "BF1", newState);
+            }
         });
         socket.on("getTarget", (callback) => {
             if (typeof callback !== "function") return;
             callback(this.currentTarget);
         });
-        socket.on("disconnect", () => {
+        socket.on("disconnecting", () => {
             this.updateSeederDisplay(socket.handshake.auth.hostname, null, null);
         });
     }
@@ -227,11 +229,19 @@ class Websockets {
         return false;
     }
     // Set target, without any kind of verification.
-    private setTarget(game: string, newTarget:ServerData) {
+    private async setTarget(game: string, newTarget:ServerData) {
         if (this.currentTarget[game].guid === newTarget.guid) return;
         this.currentTarget[game] = newTarget;
         this.frontEnd.emit("newTarget", game, newTarget);
         this.backEnd.emit("newTarget", game, newTarget);
+        // Rate Limit
+        // for (const socket of this.backEnd.sockets.values()) {
+        //     socket.emit("newTarget", game, newTarget);
+        //     console.log(`Emitted new target to ${socket.handshake.auth.hostname}.`);
+        //     if (newTarget.guid !== null) {
+        //         await wait(10000);
+        //     }
+        // }
     }
     private updateSeederDisplay(hostname:string, game:string | null, newState:string | null) {
         let newSeederState;
@@ -282,6 +292,11 @@ function checkPermissions(session:ExpressSession.Session & Partial<ExpressSessio
     if ((!users.includes(session.discordUser.id))) return PermissionState.NOT_AUTHORIZED;
     return PermissionState.SUCCESS;
 }
+// function wait(delay) {
+//     return new Promise(function (resolve) {
+//         setTimeout(resolve, delay);
+//     });
+// }
 // #endregion
 // #region Watchers
 fs.watch(usersPath, async () => {
