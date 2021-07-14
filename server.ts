@@ -1,12 +1,11 @@
 // Imports
 import http from "http";
 import express from "express";
-import ejs from "ejs";
 import "colors";
 import * as fs from "fs";
 import ExpressSession from "express-session";
 import FormData from "form-data";
-import fetch from "node-fetch";
+import fetch, { Response } from "node-fetch";
 import MemoryStore from "memorystore";
 import path from "path";
 import socket from "socket.io";
@@ -60,8 +59,7 @@ webInterface.get("/", async (req, res) => {
     const userData = checkPermissions(req.session);
     if (userData === PermissionState.NOT_LOGGED_IN) return res.redirect("/login");
     if (userData === PermissionState.NOT_AUTHORIZED) return res.redirect("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-    const html = await renderFilePromise("./assets/control.ejs", {"discordUser": req.session.discordUser}, {});
-    res.send(html);
+    res.sendFile(path.join(__dirname, "/assets/control.html"));
 });
 
 webInterface.get("/login/callback", async (req, res) => {
@@ -93,8 +91,9 @@ webInterface.get("/assets/main.js", async (req,res) => {
     if (userData === PermissionState.NOT_LOGGED_IN) return res.redirect("/login");
     if (userData === PermissionState.NOT_AUTHORIZED) return res.status(403).send();
     res.set("Content-Type", "text/javascript");
-    res.sendFile(path.join(__dirname + "/assets/main.js")); 
+    res.sendFile(path.join(__dirname, "/assets/main.js")); 
 });
+
 // #endregion
 // #region Websockets
 class Websockets {
@@ -202,23 +201,26 @@ class Websockets {
             return true;
         }
         if (game === "BF1") {
-            let newTargetReq;
+            let newTargetReq:Response;
+            let newTargetData:Record<string, any> | undefined;
             if (newTarget) {
                 // Make sure gameid is length 13 and a number
                 if (!((newTarget.length === 13) && !(isNaN(parseInt(newTarget))))) return false;
-                newTargetReq = await (await fetch(`https://api.gametools.network/bf1/detailedserver/?gameid=${newTarget}&lang=en-us&platform=pc`, {
+                newTargetReq = await fetch(`https://api.gametools.network/bf1/detailedserver/?gameid=${newTarget}&lang=en-us&platform=pc`, {
                     "headers": {
                         "User-Agent": "Mozilla/5.0 SeederManager",
                         "Accept": "application/json",
                     },
                     "method": "GET",
-                })).json();
-                if (newTargetReq.error) {
+                });
+                newTargetData = await newTargetReq.json();
+                if (newTargetReq.status !== 200) {
                     return false;
                 }
+                if (!newTargetData) return false;
             }
             const newTargetObj:ServerData = {
-                "name": newTargetReq ? newTargetReq.prefix : null,
+                "name": newTargetData ? newTargetData.prefix : null,
                 "guid":newTarget,
                 "user":author,
                 "timestamp":new Date().getTime(),
@@ -234,14 +236,6 @@ class Websockets {
         this.currentTarget[game] = newTarget;
         this.frontEnd.emit("newTarget", game, newTarget);
         this.backEnd.emit("newTarget", game, newTarget);
-        // Rate Limit
-        // for (const socket of this.backEnd.sockets.values()) {
-        //     socket.emit("newTarget", game, newTarget);
-        //     console.log(`Emitted new target to ${socket.handshake.auth.hostname}.`);
-        //     if (newTarget.guid !== null) {
-        //         await wait(10000);
-        //     }
-        // }
     }
     private updateSeederDisplay(hostname:string, game:string | null, newState:string | null) {
         let newSeederState;
@@ -278,25 +272,11 @@ class Websockets {
 
 // #endregion
 // #region Helpers
-function renderFilePromise(filename:string, data:Record<string, unknown>, options:ejs.Options):Promise<string> {
-    return new Promise((resolve, reject) => {
-        ejs.renderFile(filename, data, options, function(err, str){
-            if (err) reject(err);
-            resolve(str);
-        });
-    }
-    );
-}
 function checkPermissions(session:ExpressSession.Session & Partial<ExpressSession.SessionData>): PermissionState {
     if (!((session.bearer_token) && (session.discordUser))) return PermissionState.NOT_LOGGED_IN;
     if ((!users.includes(session.discordUser.id))) return PermissionState.NOT_AUTHORIZED;
     return PermissionState.SUCCESS;
 }
-// function wait(delay) {
-//     return new Promise(function (resolve) {
-//         setTimeout(resolve, delay);
-//     });
-// }
 // #endregion
 // #region Watchers
 fs.watch(usersPath, async () => {

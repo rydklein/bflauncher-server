@@ -46,8 +46,6 @@
     <div>
         <h1>Seeder Control Panel</h1>
         <i>CSS wasn't in the budget. Sorry.</i><br>
-        <b>You're logged in as: </b>
-        <%= `${discordUser.username}#${discordUser.discriminator}` %><br>
     </div>
     <br>
     <div>
@@ -55,7 +53,7 @@
             <h3 class="noGap">Battlefield 4</h3>
             <b><span id="targetName">Loading...</span></b><br>
             <span id=targetLinkSpan hidden=true>
-                Game ID: <a id="targetLink">Loading...</a>
+                GUID: <a id="targetLink">Loading...</a>
                 <br>
             </span>
             <span id="targetAuthor">Loading...</span>
@@ -81,16 +79,16 @@
         <br>
         <button id="guidSubmit" onclick="submitGUIDChange()">Submit</button><button id="disconnect"
             onclick="disconnectFromServer()">Disconnect</button><br>
-        <span id="guidChangeStatus" hidden=true></span>
+        <span id="guidChangeStatus" hidden=true></span><br>
     </div>
     <div>
         <br>
         <a href="https://battlelog.battlefield.com/bf4/servers/pc/">BF4 Server GUIDs</a><br>
         Find your server, click on it, find "VIEW FULL SERVER PAGE," the server GUID is in the URL.<br>
-        https://battlelog.battlefield.com/bf4/servers/show/pc/<b style="color: green">c63320eb-e4c5-46fa-a9a1-ebe6f2a4f393</b>/Salt-vs-Beefy/<br>
+        https://battlelog.battlefield.com/bf4/servers/show/pc/<b style="color: green">899420dc-e958-4048-b4c2-27ae76bfeed5</b>/Worst-Hitreg-Global<br>
         <br>
         <a href="https://gametools.network/servers?game=bf1&region=all&platform=pc">BF1 Server IDs</a><br>
-        Search for your server, click on it, the server id is in the URL.<br>https://gametools.network/servers/bf1/gameid/<b style="color: green">5462554500815</b>/pc
+        Search for your server, click on it, the server id is in the URL.<br>https://gametools.network/servers/bf1/gameid/<b style="color: green">1234567899999</b>/pc
     </div>
     <h4>Seeder Clients</h4>
     <table id="seeders">
