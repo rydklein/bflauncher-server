@@ -88,6 +88,13 @@ webInterface.get("/assets/main.js", async (req, res) => {
     res.set("Content-Type", "text/javascript");
     res.sendFile(path.join(__dirname, "/assets/main.js")); 
 });
+webInterface.get("/assets/sorttable.js", async (req, res) => {
+    const userData = checkPermissions(req.session);
+    if (userData === PermissionState.NOT_LOGGED_IN) return res.status(401).send();
+    if (userData === PermissionState.NOT_AUTHORIZED) return res.status(403).send();
+    res.set("Content-Type", "text/javascript");
+    res.sendFile(path.join(__dirname, "/assets/sorttable.js")); 
+});
 webInterface.get("/assets/main.css", async (req, res) => {
     const userData = checkPermissions(req.session);
     if (userData === PermissionState.NOT_LOGGED_IN) return res.status(401).send();
@@ -99,12 +106,14 @@ webInterface.get("/assets/main.css", async (req, res) => {
 // #endregion
 // #region Websockets
 class Websockets {
+    public seeders:Map<string, SeederData> = new Map();
+    public apiVersion:number;
     private io:socket.Server;
     private frontEnd:socket.Namespace;
     private backEnd:socket.Namespace;
     private clientSockets:Array<socket.Socket> = [];
-    public seeders:Map<string, SeederData> = new Map();
     constructor(webServer:http.Server, authMiddleware:express.RequestHandler, checkPerms:any, clientToken:string) {
+        this.apiVersion = parseInt(JSON.parse(fs.readFileSync("./version.json", {"encoding":"utf-8"})).apiVersion);
         this.io = new socket.Server(webServer);
         this.frontEnd = this.io.of("/ws/web");
         this.backEnd = this.io.of("/ws/seeder");
@@ -120,6 +129,11 @@ class Websockets {
         });
         this.backEnd.on("connection", async (socket) => {
             if (socket.handshake.auth.token !== clientToken) return socket.disconnect(true);
+            if (parseInt((<string>socket.handshake.auth.version).split(".")[0]) !== this.apiVersion) {
+                socket.emit("outOfDate");
+                socket.disconnect(true);
+                return;
+            }
             const initSeeder:SeederData = {
                 username:socket.handshake.auth.playerName,
                 hostname:socket.handshake.auth.hostname,

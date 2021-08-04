@@ -4,6 +4,7 @@
     <title>Seeder Control Panel</title>
     <meta name="format-detection" content="telephone=no">
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/assets/sorttable.js"></script>
     <script src="/assets/main.js"></script>
     <link rel="stylesheet" href="assets/main.css">
 </head>
@@ -42,11 +43,11 @@
         <span id="newTargetStatus" hidden=true></span><br>
     </div>
     <h4>Seeder Clients (<span id=seederCount>0</span>)</h4>
-    <table id="seeders">
+    <table id="seeders" class="sortable">
         <thead>
             <tr>
-                <th><input type="checkbox" onchange="checkAllMachines(this)" /> </th>
-                <th>Machine Name</th>
+                <th class="sorttable_nosort"><input type="checkbox" onchange="checkAllMachines(this)" /> </th>
+                <th id="mColumn">Machine Name</th>
                 <th>Account Name</th>
                 <th>Target (BF4)</th>
                 <th>Target (BF1)</th>

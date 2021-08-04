@@ -27,8 +27,6 @@ td:first-child,
 th:first-child {
     padding-left: 0;
 }
-
-td:last-child,
-th:last-child {
-    padding-right: 0;
+table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sorttable_nosort):after { 
+    content: " \25B4\25BE" 
 }

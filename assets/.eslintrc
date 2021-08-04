@@ -4,6 +4,7 @@
   },
   "root": false,
   "globals": {
-    "io": "readonly"
+    "io": "readonly",
+    "sorttable": "readonly"
   }
 }

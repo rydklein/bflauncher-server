@@ -1,6 +1,7 @@
 type SeederData = import("../commonTypes").SeederData;
 type Socket = import("socket.io-client").Socket;
 declare function io(path);
+declare const sorttable;
 const socket:Socket = io("/ws/web");
 let statusTimeout:ReturnType<typeof setTimeout> | null;
 const guidRegex = new RegExp("^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$");
@@ -28,6 +29,7 @@ function setSeeder(seederId:string, seederData:SeederData) {
         const table = document.getElementById("seeders")!.getElementsByTagName("tbody")[0];
         row = table.insertRow();
         row.id = seederId;
+        row.hidden = true;
         for (let i = Object.keys(TableFields).length / 2; i > 0; i--) {
             row.insertCell();
         }
@@ -48,6 +50,11 @@ function setSeeder(seederId:string, seederData:SeederData) {
     row.cells[TableFields["SBF1"]].title = `${seederData.targetBF1.name || "NONE"}\n${new Date(seederData.targetBF1.timestamp).toLocaleString()}\n${seederData.targetBF1.user}`;
     row.cells[TableFields["SBF1"]].style.backgroundColor = stateColor[seederData.stateBF1];
     row.cells[TableFields["SBF1"]].className = "coloredBack";
+    const sortElement = document.getElementsByClassName("sorttable_sorted_reverse")[0] || document.getElementsByClassName("sorttable_sorted")[0];
+    if (sortElement) {
+        sorttable.innerSortFunction.apply(sortElement, null);
+    }
+    row.hidden = false;
 }
 function removeSeeder(seederId:string) {
     document.getElementById(seederId)!.remove();
@@ -176,9 +183,18 @@ function checkboxDragHandler(element:HTMLInputElement) {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function restartOrigin() {
     const statusText = document.getElementById("newTargetStatus") as HTMLInputElement;
-    statusText.innerText = "Restarting. Do not spam this button!";
+    if (!getCheckedSeeders()[0]) {
+        statusText.innerText = "Please select one or more bot(s).";
+        showStatusText();
+        return;
+    } else {
+        const checkedSeeders = getCheckedSeeders();
+        const confirmMessage = `Are you sure you want to restart Origin on ${checkedSeeders.length} client${checkedSeeders.length > 1 ? "s" : ""}?`;
+        if (!window.confirm(confirmMessage)) return;
+        statusText.innerText = "Restarting Origin.";
+        socket.emit("restartOrigin", );
+    }
     showStatusText();
-    socket.emit("restartOrigin", getCheckedSeeders());
 }
 // #endregion
 // #region Event Listeners
@@ -190,7 +206,8 @@ document.addEventListener("DOMContentLoaded", () => {
         mouseDown = false;
     };
     gameListener();
-}, false);
+    sorttable.innerSortFunction.apply(document.getElementById("mColumn"), null);
+}, false); 
 // #endregion
 // #region Helpers
 function mapReviver(key, value) {
