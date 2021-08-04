@@ -1,0 +1,34 @@
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    margin-bottom: 5px;
+}
+
+.noGap {
+    margin-top: 0px;
+    margin-bottom: 0px;
+}
+
+tbody>tr:nth-child(odd) {
+    background-color: #d3d3d3;
+}
+
+th,
+td {
+    text-align: left;
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+td:first-child,
+th:first-child {
+    padding-left: 0;
+}
+
+td:last-child,
+th:last-child {
+    padding-right: 0;
+}

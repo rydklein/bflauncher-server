@@ -12,13 +12,15 @@
   "rules": {
     "indent": [
       "warn",
-      4
+      4, 
+      {
+        "SwitchCase": 1
+      }
     ],
     "semi": [
       "warn",
       "always"
     ],
-    "@typescript-eslint/no-explicit-any": "off",
     "comma-dangle": [
       "warn",
       "always-multiline"
@@ -26,6 +28,11 @@
     "quotes": [
       "warn",
       "double"
-  ]
+    ],
+    "switch-colon-spacing": ["error", {"after": true, "before": false}],
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-non-null-assertion": "off",
+    "@typescript-eslint/consistent-type-definitions": ["warn", "interface"],
+    "@typescript-eslint/type-annotation-spacing": ["warn", {"after": false, "before": false}]
   }
 }

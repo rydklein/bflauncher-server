@@ -2,113 +2,68 @@
 
 <head>
     <title>Seeder Control Panel</title>
+    <meta name="format-detection" content="telephone=no">
     <script src="/socket.io/socket.io.js"></script>
     <script src="/assets/main.js"></script>
-    <style>
-        h1,
-        h2,
-        h3,
-        h4,
-        h5,
-        h6 {
-            margin-bottom: 5px;
-        }
-
-        .noGap {
-            margin-top: 0px;
-            margin-bottom: 0px;
-        }
-
-        tr:nth-child(even) {
-            background-color: #f2f2f2;
-        }
-
-        th,
-        td {
-            text-align: left;
-            padding-left: 15px;
-            padding-right: 15px;
-        }
-
-        td:first-child,
-        th:first-child {
-            padding-left: 0;
-        }
-
-        td:last-child,
-        th:last-child {
-            padding-right: 0;
-        }
-    </style>
+    <link rel="stylesheet" href="assets/main.css">
 </head>
 
 <body>
     <div>
         <h1>Seeder Control Panel</h1>
         <i>CSS wasn't in the budget. Sorry.</i><br>
-    </div>
-    <br>
-    <div>
-        <div id="BF4Status">
-            <h3 class="noGap">Battlefield 4</h3>
-            <b><span id="targetName">Loading...</span></b><br>
-            <span id=targetLinkSpan hidden=true>
-                GUID: <a id="targetLink">Loading...</a>
-                <br>
-            </span>
-            <span id="targetAuthor">Loading...</span>
-        </div>
-        <div id="BF1Status">
-            <h3 class="noGap">Battlefield 1</h3>
-            <b><span id="targetName">Loading...</span></b><br>
-            <span id=targetLinkSpan hidden=true>
-                Game ID: <a id="targetLink">Loading...</a>
-                <br>
-            </span>
-            <span id="targetAuthor">Loading...</span>
-        </div>
-    </div>
-    <div>
-        <h3>Control</h3>
-        Please enter the <span id="idiotInstructions">Server GUID</span> to seed.<br>
-        <input type="text" id="serverGUID" placeholder="Server GUID" onkeypress="return event.keyCode != 13;"> <select
-            id="game" name="game" onchange="gameListener()">
-            <option selected value="BF4">BF4</option>
-            <option value="BF1">BF1</option>
-        </select>
-        <br>
-        <button id="guidSubmit" onclick="submitGUIDChange()">Submit</button><button id="disconnect"
-            onclick="disconnectFromServer()">Disconnect</button><br>
-        <span id="guidChangeStatus" hidden=true></span><br>
+        Made with <span style="text-decoration: line-through;">toleration</span> love by <a
+            href="https://github.com/BadPylot">BadPylot</a>.<br>
+        Big thanks to PolloLoco for finding the command line flags needed to properly launch the game.
     </div>
     <div>
         <br>
         <a href="https://battlelog.battlefield.com/bf4/servers/pc/">BF4 Server GUIDs</a><br>
         Find your server, click on it, find "VIEW FULL SERVER PAGE," the server GUID is in the URL.<br>
-        https://battlelog.battlefield.com/bf4/servers/show/pc/<b style="color: green">899420dc-e958-4048-b4c2-27ae76bfeed5</b>/Worst-Hitreg-Global<br>
+        https://battlelog.battlefield.com/bf4/servers/show/pc/<b
+            style="color: #27ae60">899420dc-e958-4048-b4c2-27ae76bfeed5</b>/Worst-Hitreg-Global<br>
         <br>
         <a href="https://gametools.network/servers?game=bf1&region=all&platform=pc">BF1 Server IDs</a><br>
-        Search for your server, click on it, the server id is in the URL.<br>https://gametools.network/servers/bf1/gameid/<b style="color: green">1234567899999</b>/pc
+        Search for your server, click on it, the server id is in the
+        URL.<br>https://gametools.network/servers/bf1/gameid/<b style="color: #27ae60">1234567899999</b>/pc
     </div>
-    <h4>Seeder Clients</h4>
+    <div>
+        <h3>Control</h3>
+        Please enter the <span id="serverIDDesc">Server GUID</span> to seed.<br>
+        <input type="text" id="newTargetInput" autocomplete="off" placeholder="Server GUID"
+            onkeypress="return event.keyCode != 13;"> <select id="game" name="game" onchange="gameListener()">
+            <option selected value="BF4">BF4</option>
+            <option value="BF1">BF1</option>
+        </select>
+        <br>
+        <button id="newTargetSubmit" onclick="sendMachinesToServer()">Submit</button>
+        <button id="disconnect" onclick="disconnectFromServer()">Disconnect</button><br>
+        <button onclick="restartOrigin()" style="background-color:#e74c3c;color:white">Restart Origin</button><br>
+        <span id="newTargetStatus" hidden=true></span><br>
+    </div>
+    <h4>Seeder Clients (<span id=seederCount>0</span>)</h4>
     <table id="seeders">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>Status (BF4)</th>
-                <th>Status (BF1)</th>
-                <th>Last Update</th>
+                <th><input type="checkbox" onchange="checkAllMachines(this)" /> </th>
+                <th>Machine Name</th>
+                <th>Account Name</th>
+                <th>Target (BF4)</th>
+                <th>Target (BF1)</th>
             </tr>
         </thead>
         <tbody>
         </tbody>
         </div>
     </table>
-    <div style="position: absolute; bottom: 5px;">
-        Made with <span style="text-decoration: line-through;">toleration</span> love by <a
-            href="https://github.com/BadPylot">BadPylot</a>.<br>
-        Big thanks to PolloLoco for finding the command line flags needed to properly launch the game.
+    <div class="coloredBack">
+        <span style="background-color:#e74c3c">IDLE</span>
+        <span style="background-color:#f39c12">LAUNCHING</span>
+        <span style="background-color:#f1c40f">JOINING</span>
+        <span style="background-color:#2ecc71">ACTIVE</span>
+        <span style="background-color:#7f8c8d">UNOWNED</span>
     </div>
+    <span>Mouse over the target cells for more information about the target.</span>
 </body>
 
 </html>

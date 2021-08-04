@@ -1,6 +1,7 @@
 // Imports
 import http from "http";
 import express from "express";
+import { SeederData, ServerData } from "./commonTypes";
 import "colors";
 import * as fs from "fs";
 import ExpressSession from "express-session";
@@ -15,28 +16,22 @@ enum PermissionState {
     "NOT_LOGGED_IN",
     "NOT_AUTHORIZED"
 }
-type SeederStorage = {
-    state: string,
-    timestamp: number
-}
-type ServerData = {
-    "name":string | null,
-    "guid":string | null,
-    "user":string,
-    "timestamp":number
-}
-
 //#endregion
 // Global Variables
 const config = JSON.parse(fs.readFileSync("./config/config.json", {"encoding":"utf-8"}));
 const guidRegex = new RegExp("^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$");
 const webInterface = express();
 const httpServer = http.createServer(webInterface);
+const emptyTarget = {
+    "name":null,
+    "guid":null,
+    "user":"System",
+    "timestamp":new Date().getTime(),
+};
 // #region Startup
 const usersPath = "./config/users.json";
-let users: Array<string> = JSON.parse(fs.readFileSync(usersPath, {"encoding":"utf-8"}));
+let users:Array<string> = JSON.parse(fs.readFileSync(usersPath, {"encoding":"utf-8"}));
 // #endregion
-// #region Client <-> Server
 const sessionStorage = MemoryStore(ExpressSession);
 const sessionConfig = {
     "secret": config.sessionSecret,
@@ -53,7 +48,7 @@ const sessionConfig = {
 const sessionMiddleware = ExpressSession(sessionConfig);
 const oAuthLoginUrl = `https://discord.com/api/oauth2/authorize?client_id=${config.oauth2.client_id}&redirect_uri=${encodeURIComponent(config.oauth2.redirect_uri)}&response_type=code&scope=${encodeURIComponent(config.oauth2.scopes.join(" "))}`;
 webInterface.use(sessionMiddleware);
-// #region Frontend
+// #region HTTP
 webInterface.get("/", async (req, res) => {
     // If not logged in, redirect to login page.
     const userData = checkPermissions(req.session);
@@ -86,12 +81,19 @@ webInterface.get("/login", (req, res) => {
     // Redirecting to login url
     res.redirect(oAuthLoginUrl);
 });
-webInterface.get("/assets/main.js", async (req,res) => {
+webInterface.get("/assets/main.js", async (req, res) => {
     const userData = checkPermissions(req.session);
-    if (userData === PermissionState.NOT_LOGGED_IN) return res.redirect("/login");
+    if (userData === PermissionState.NOT_LOGGED_IN) return res.status(401).send();
     if (userData === PermissionState.NOT_AUTHORIZED) return res.status(403).send();
     res.set("Content-Type", "text/javascript");
     res.sendFile(path.join(__dirname, "/assets/main.js")); 
+});
+webInterface.get("/assets/main.css", async (req, res) => {
+    const userData = checkPermissions(req.session);
+    if (userData === PermissionState.NOT_LOGGED_IN) return res.status(401).send();
+    if (userData === PermissionState.NOT_AUTHORIZED) return res.status(403).send();
+    res.set("Content-Type", "text/css");
+    res.sendFile(path.join(__dirname, "/assets/main.css")); 
 });
 
 // #endregion
@@ -100,22 +102,8 @@ class Websockets {
     private io:socket.Server;
     private frontEnd:socket.Namespace;
     private backEnd:socket.Namespace;
-    private clientSockets: Array<socket.Socket> = [];
-    public seeders: Map<string, Record<string, SeederStorage>> = new Map();
-    public currentTarget:Record<string, ServerData> = {
-        "BF4": {
-            "name":null,
-            "guid":null,
-            "user":"System",
-            "timestamp":new Date().getTime(),
-        },
-        "BF1": {
-            "name":null,
-            "guid":null,
-            "user":"System",
-            "timestamp":new Date().getTime(),
-        },
-    }
+    private clientSockets:Array<socket.Socket> = [];
+    public seeders:Map<string, SeederData> = new Map();
     constructor(webServer:http.Server, authMiddleware:express.RequestHandler, checkPerms:any, clientToken:string) {
         this.io = new socket.Server(webServer);
         this.frontEnd = this.io.of("/ws/web");
@@ -132,6 +120,17 @@ class Websockets {
         });
         this.backEnd.on("connection", async (socket) => {
             if (socket.handshake.auth.token !== clientToken) return socket.disconnect(true);
+            const initSeeder:SeederData = {
+                username:socket.handshake.auth.playerName,
+                hostname:socket.handshake.auth.hostname,
+                stateBF4:socket.handshake.auth.hasBF4 ? "IDLE" : "UNOWNED",
+                stateBF1:socket.handshake.auth.hasBF1 ? "IDLE" : "UNOWNED",
+                targetBF4:emptyTarget,
+                targetBF1:emptyTarget,
+                lastUpdate:new Date().getTime(),
+            };
+            this.seeders.set(socket.id, initSeeder);
+            this.frontEnd.emit("seederUpdate", socket.id, initSeeder);
             this.registerEventsBackend(socket);
         });
     }
@@ -141,36 +140,35 @@ class Websockets {
             if (typeof callback !== "function") return;
             callback(JSON.stringify(this.seeders, Websockets.mapReplacer));
         });
-        socket.on("setTarget", async (game, newTarget:string, callback) => {
+        socket.on("setTarget", async (game, seeders:Array<string>, newTarget:string, callback) => {
             if (typeof callback !== "function") return;
-            const success = await this.verifyAndSetTarget(game, newTarget, `${socket.request["session"].discordUser.username}#${socket.request["session"].discordUser.discriminator}`);
+            const success = await this.verifyAndSetTarget(game, seeders, newTarget, `${socket.request["session"].discordUser.username}#${socket.request["session"].discordUser.discriminator}`);
             callback(success);
         });
-        // No option for game selector since the only time this endpoint is used
-        // Is when initializing the website, and both will be needed.
-        socket.on("getTarget", (callback) => {
-            if (typeof callback !== "function") return;
-            callback(this.currentTarget);
+        socket.on("restartOrigin", (seeders:Array<string>) => {
+            for (const seederId of seeders) {
+                const targetSocket = this.backEnd.sockets.get(seederId);
+                if (!targetSocket) continue;
+                targetSocket.emit("restartOrigin", `${socket.request["session"].discordUser.username}#${socket.request["session"].discordUser.discriminator}`);
+            }
         });
     }
     private registerEventsBackend(socket:socket.Socket) {
-        socket.on("gameStateUpdate", (game: string, newState:string) => {
+        socket.on("gameStateUpdate", (game:string, newState:string) => {
             if (game === "BF4") {
-                this.updateSeederDisplay(socket.handshake.auth.hostname, "BF4", newState);
+                this.seeders.get(socket.id)!.stateBF4 = newState;
             } else if (game === "BF1") {
-                this.updateSeederDisplay(socket.handshake.auth.hostname, "BF1", newState);
+                this.seeders.get(socket.id)!.stateBF1 = newState;
             }
-        });
-        socket.on("getTarget", (callback) => {
-            if (typeof callback !== "function") return;
-            callback(this.currentTarget);
+            this.frontEnd.emit("seederUpdate", socket.id, this.seeders.get(socket.id));
         });
         socket.on("disconnecting", () => {
-            this.updateSeederDisplay(socket.handshake.auth.hostname, null, null);
+            this.frontEnd.emit("seederGone", socket.id);
+            this.seeders.delete(socket.id);
         });
     }
     // Verify target is real, and then set it. Returns true if successful, false if not.
-    public async verifyAndSetTarget(game:string, newTarget:string | null, author?:string):Promise<boolean> {
+    public async verifyAndSetTarget(game:string, seeders:Array<string>, newTarget:string | null, author?:string):Promise<boolean> {
         author = author || "System";
         if (game === "BF4") {
             let newTargetReq;
@@ -197,7 +195,7 @@ class Websockets {
                 "user":author,
                 "timestamp":new Date().getTime(),
             };
-            this.setTarget("BF4", newTargetObj);
+            this.setTarget("BF4", seeders, newTargetObj);
             return true;
         }
         if (game === "BF1") {
@@ -225,38 +223,21 @@ class Websockets {
                 "user":author,
                 "timestamp":new Date().getTime(),
             };
-            this.setTarget("BF1", newTargetObj);
+            this.setTarget("BF1", seeders, newTargetObj);
             return true;
         }
         return false;
     }
     // Set target, without any kind of verification.
-    private async setTarget(game: string, newTarget:ServerData) {
-        if (this.currentTarget[game].guid === newTarget.guid) return;
-        this.currentTarget[game] = newTarget;
-        this.frontEnd.emit("newTarget", game, newTarget);
-        this.backEnd.emit("newTarget", game, newTarget);
-    }
-    private updateSeederDisplay(hostname:string, game:string | null, newState:string | null) {
-        let newSeederState;
-        if(!(game && newState)) {
-            this.seeders.delete(hostname);
-        } else {
-            const seederData:SeederStorage = {
-                "state":newState,
-                "timestamp":Date.now(),
-            };  
-            newSeederState = this.seeders.get(hostname);
-            if (!newSeederState) {
-                newSeederState = {
-                    [game]: seederData,
-                };
-            } else {
-                newSeederState[game] = seederData;
-            }
-            this.seeders.set(hostname, newSeederState);
+    private setTarget(game:string, seeders:Array<string>, newTarget:ServerData) {
+        for (const seederId of seeders) {
+            const targetSocket = this.backEnd.sockets.get(seederId);
+            const targetSeeder = this.seeders.get(seederId);
+            if (!(targetSocket && targetSeeder && (targetSeeder[`state${game}`] !== "UNOWNED"))) continue;
+            targetSeeder[`target${game}`] = newTarget;
+            this.frontEnd.emit("seederUpdate", seederId, targetSeeder);
+            targetSocket.emit("newTarget", game, newTarget);
         }
-        this.frontEnd.emit("seederUpdate", hostname, game, newState);
     }
     public static mapReplacer(key, value) {
         if(value instanceof Map) {
@@ -272,7 +253,7 @@ class Websockets {
 
 // #endregion
 // #region Helpers
-function checkPermissions(session:ExpressSession.Session & Partial<ExpressSession.SessionData>): PermissionState {
+function checkPermissions(session:ExpressSession.Session & Partial<ExpressSession.SessionData>):PermissionState {
     if (!((session.bearer_token) && (session.discordUser))) return PermissionState.NOT_LOGGED_IN;
     if ((!users.includes(session.discordUser.id))) return PermissionState.NOT_AUTHORIZED;
     return PermissionState.SUCCESS;

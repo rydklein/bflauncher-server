@@ -4,9 +4,9 @@
         "noImplicitAny": false,
         "resolveJsonModule": true,
         "downlevelIteration": true,
-        "esModuleInterop":true
+        "esModuleInterop": true
     },
     "files": [
         "./server.ts"
     ]
-}   
+}

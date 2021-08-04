@@ -76,9 +76,5 @@ typings/
 .fusebox/
 # Other Stuff
 config.json
-.local-chromium
-dist
-cert.pem
-cert.key
 users.json
-server.js
+*.js
