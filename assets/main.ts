@@ -192,7 +192,7 @@ function restartOrigin() {
         const confirmMessage = `Are you sure you want to restart Origin on ${checkedSeeders.length} client${checkedSeeders.length > 1 ? "s" : ""}?`;
         if (!window.confirm(confirmMessage)) return;
         statusText.innerText = "Restarting Origin.";
-        socket.emit("restartOrigin", );
+        socket.emit("restartOrigin", checkedSeeders);
     }
     showStatusText();
 }

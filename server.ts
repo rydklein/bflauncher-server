@@ -160,6 +160,7 @@ class Websockets {
             callback(success);
         });
         socket.on("restartOrigin", (seeders:Array<string>) => {
+            if (!isIterable(seeders)) return;
             for (const seederId of seeders) {
                 const targetSocket = this.backEnd.sockets.get(seederId);
                 if (!targetSocket) continue;
@@ -244,6 +245,7 @@ class Websockets {
     }
     // Set target, without any kind of verification.
     private setTarget(game:string, seeders:Array<string>, newTarget:ServerData) {
+        if (!isIterable(seeders)) return;
         for (const seederId of seeders) {
             const targetSocket = this.backEnd.sockets.get(seederId);
             const targetSeeder = this.seeders.get(seederId);
@@ -271,6 +273,13 @@ function checkPermissions(session:ExpressSession.Session & Partial<ExpressSessio
     if (!((session.bearer_token) && (session.discordUser))) return PermissionState.NOT_LOGGED_IN;
     if ((!users.includes(session.discordUser.id))) return PermissionState.NOT_AUTHORIZED;
     return PermissionState.SUCCESS;
+}
+function isIterable(obj) {
+    // checks for null and undefined
+    if (obj == null) {
+        return false;
+    }
+    return typeof obj[Symbol.iterator] === "function";
 }
 // #endregion
 // #region Watchers
