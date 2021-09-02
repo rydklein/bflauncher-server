@@ -19,12 +19,12 @@
     </div>
     <div>
         <br>
-        <a href="https://battlelog.battlefield.com/bf4/servers/pc/">BF4 Server GUIDs</a><br>
+        <a href="https://battlelog.battlefield.com/bf4/servers/pc/" target="_blank">BF4 Server GUIDs</a><br>
         Find your server, click on it, find "VIEW FULL SERVER PAGE," the server GUID is in the URL.<br>
         https://battlelog.battlefield.com/bf4/servers/show/pc/<b
             style="color: #27ae60">899420dc-e958-4048-b4c2-27ae76bfeed5</b>/Worst-Hitreg-Global<br>
         <br>
-        <a href="https://gametools.network/servers?game=bf1&region=all&platform=pc">BF1 Server IDs</a><br>
+        <a href="https://gametools.network/servers?game=bf1&region=all&platform=pc" target="_blank">BF1 Server IDs</a><br>
         Search for your server, click on it, the server id is in the
         URL.<br>https://gametools.network/servers/bf1/gameid/<b style="color: #27ae60">1234567899999</b>/pc
     </div>
@@ -42,6 +42,8 @@
         <button onclick="restartOrigin()" style="background-color:#e74c3c;color:white">Restart Origin</button><br>
         <span id="newTargetStatus" hidden=true></span><br>
     </div>
+    <div id="controls">
+    <div class="seederList">
     <h4>Seeder Clients (<span id=seederCount>0</span>)</h4>
     <table id="seeders" class="sortable">
         <thead>
@@ -65,6 +67,13 @@
         <span style="background-color:#7f8c8d">UNOWNED</span>
     </div>
     <span>Mouse over the target cells for more information about the target.</span>
+</div>
+<div class="automationControls">
+    <h4>Automation Status</h4>
+    <span id="autoStatus">Loading...</span>
+    <button id="autoToggle">Loading...</button>
+</div>
+</div>
 </body>
 
 </html>

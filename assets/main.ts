@@ -16,12 +16,19 @@ enum TableFields {
     "SBF4",
     "SBF1",
 }
+enum GameState {
+    "UNOWNED",
+    "IDLE",
+    "LAUNCHING",
+    "JOINING",
+    "ACTIVE",
+}
 const stateColor = {
-    "UNOWNED": "#7f8c8d",
-    "IDLE": "#e74c3c",
-    "LAUNCHING": "#f39c12",
-    "JOINING": "#f1c40f",
-    "ACTIVE": "#2ecc71",
+    0: "#7f8c8d",
+    1: "#e74c3c",
+    2: "#f39c12",
+    3: "#f1c40f",
+    4: "#2ecc71",
 };
 function setSeeder(seederId:string, seederData:SeederData) {
     let row = document.getElementById(seederId) as HTMLTableRowElement;
@@ -42,12 +49,16 @@ function setSeeder(seederId:string, seederData:SeederData) {
     }
     row.cells[TableFields["MNAME"]].innerText = seederData.hostname;
     row.cells[TableFields["ANAME"]].innerText = seederData.username;
-    row.cells[TableFields["SBF4"]].innerText = seederData.targetBF4.guid || (seederData.stateBF4 === "UNOWNED" ? "UNOWNED" : "NONE");
-    row.cells[TableFields["SBF4"]].title = `${seederData.targetBF4.name || "NONE"}\n${new Date(seederData.targetBF4.timestamp).toLocaleString()}\n${seederData.targetBF4.user}`;
+    row.cells[TableFields["SBF4"]].innerText = seederData.targetBF4.guid || (seederData.stateBF4 === GameState.UNOWNED ? "UNOWNED" : "NONE");
+    if (seederData.stateBF4 !== GameState.UNOWNED) {
+        row.cells[TableFields["SBF4"]].title = `${seederData.targetBF4.name || "NONE"}\n${new Date(seederData.targetBF4.timestamp).toLocaleString()}\n${seederData.targetBF4.user}`;
+    }
     row.cells[TableFields["SBF4"]].style.backgroundColor = stateColor[seederData.stateBF4];
     row.cells[TableFields["SBF4"]].className = "coloredBack";
-    row.cells[TableFields["SBF1"]].innerText = seederData.targetBF1.guid || (seederData.stateBF1 === "UNOWNED" ? "UNOWNED" : "NONE");
-    row.cells[TableFields["SBF1"]].title = `${seederData.targetBF1.name || "NONE"}\n${new Date(seederData.targetBF1.timestamp).toLocaleString()}\n${seederData.targetBF1.user}`;
+    row.cells[TableFields["SBF1"]].innerText = seederData.targetBF1.gameId || (seederData.stateBF1 === GameState.UNOWNED ? "UNOWNED" : "NONE");
+    if (seederData.stateBF1 !== GameState.UNOWNED) {
+        row.cells[TableFields["SBF1"]].title = `${seederData.targetBF1.name || "NONE"}\n${new Date(seederData.targetBF1.timestamp).toLocaleString()}\n${seederData.targetBF1.user}`;
+    }
     row.cells[TableFields["SBF1"]].style.backgroundColor = stateColor[seederData.stateBF1];
     row.cells[TableFields["SBF1"]].className = "coloredBack";
     const sortElement = document.getElementsByClassName("sorttable_sorted_reverse")[0] || document.getElementsByClassName("sorttable_sorted")[0];
@@ -71,12 +82,19 @@ function getCheckedSeeders() {
     return checkedSeeders;
 }
 // #endregion
-let seeders:Map<string, SeederData>;
-socket.emit("getSeeders", (seedersRaw) => {
-    seeders = JSON.parse(seedersRaw, mapReviver);
-    for (const [mapKey, mapValue] of seeders) {
-        setSeeder(mapKey, mapValue);
+socket.on("connect", () => {
+    socket.emit("getSeeders", (seedersRaw) => {
+        const seeders:Map<string, SeederData> = JSON.parse(seedersRaw, mapReviver);
+        for (const [mapKey, mapValue] of seeders) {
+            setSeeder(mapKey, mapValue);
+        }
+    });
+});
+socket.on("disconnect", () => {
+    for (const row of document.getElementById("seeders")!.getElementsByTagName("tbody")[0].children)  {
+        row.remove();
     }
+    updateSeederCount();
 });
 socket.on("seederUpdate", (seederId:string, seederValue:SeederData) => {
     setSeeder(seederId, seederValue);
@@ -145,15 +163,12 @@ function gameListener() {
     const bf1ServerIdentifier = "Game ID";
     const targetIDInput = document.getElementById("newTargetInput") as HTMLInputElement;
     const lastServerIdTemp = targetIDInput.value;
-    const serverIDDesc = document.getElementById("newTargetStatus");
     const value = (<HTMLInputElement>document.getElementById("game")).value;
     if (value === "BF4") {
         targetIDInput.placeholder = bf4ServerIdentifier;
-        serverIDDesc!.innerText = bf4ServerIdentifier;
     }
     if (value === "BF1") {
         targetIDInput.placeholder = bf1ServerIdentifier;
-        serverIDDesc!.innerText = bf1ServerIdentifier;
     }
     targetIDInput.value = lastServerId;
     lastServerId = lastServerIdTemp;

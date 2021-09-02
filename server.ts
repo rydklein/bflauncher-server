@@ -1,8 +1,7 @@
 // Imports
 import http from "http";
 import express from "express";
-import { SeederData, ServerData } from "./commonTypes";
-import "colors";
+import { SeederData, ServerData, AutomationStatus } from "./commonTypes";
 import * as fs from "fs";
 import ExpressSession from "express-session";
 import FormData from "form-data";
@@ -16,21 +15,31 @@ enum PermissionState {
     "NOT_LOGGED_IN",
     "NOT_AUTHORIZED"
 }
+enum GameState {
+    "UNOWNED",
+    "IDLE",
+    "LAUNCHING",
+    "JOINING",
+    "ACTIVE",
+}
+interface ServerConfig {
+    name?:string, // For BF1 servers, name from https://gametools.network/servers
+    guid?:string, // For BF4 servers
+    targetPlayers:number, // Playercount to maintain using bots. Will connect/disconnect bots to keep the server at this count.
+    deadIntervals:[number, number], // Time to stop seeding server, time to start seeding server.
+    emptyThreshold:number, // Minimum real playercount to seed with bots.
+}
 //#endregion
 // Global Variables
 const config = JSON.parse(fs.readFileSync("./config/config.json", {"encoding":"utf-8"}));
 const guidRegex = new RegExp("^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$");
 const webInterface = express();
 const httpServer = http.createServer(webInterface);
-const emptyTarget = {
-    "name":null,
-    "guid":null,
-    "user":"System",
-    "timestamp":new Date().getTime(),
-};
 // #region Startup
 const usersPath = "./config/users.json";
+const serversPath = "./config/servers.json";
 let users:Array<string> = JSON.parse(fs.readFileSync(usersPath, {"encoding":"utf-8"}));
+let servers:Array<ServerConfig> = JSON.parse(fs.readFileSync(serversPath, {"encoding":"utf-8"}));
 // #endregion
 const sessionStorage = MemoryStore(ExpressSession);
 const sessionConfig = {
@@ -106,12 +115,13 @@ webInterface.get("/assets/main.css", async (req, res) => {
 // #endregion
 // #region Websockets
 class Websockets {
+    private static autoName = "Auto";
     public seeders:Map<string, SeederData> = new Map();
     public apiVersion:number;
+    public enableAuto = false;
     private io:socket.Server;
     private frontEnd:socket.Namespace;
     private backEnd:socket.Namespace;
-    private clientSockets:Array<socket.Socket> = [];
     constructor(webServer:http.Server, authMiddleware:express.RequestHandler, checkPerms:any, clientToken:string) {
         this.apiVersion = parseInt(JSON.parse(fs.readFileSync("./version.json", {"encoding":"utf-8"})).apiVersion);
         this.io = new socket.Server(webServer);
@@ -128,25 +138,30 @@ class Websockets {
             this.registerEventsFrontend(socket);
         });
         this.backEnd.on("connection", async (socket) => {
-            if (socket.handshake.auth.token !== clientToken) return socket.disconnect(true);
-            if (parseInt((<string>socket.handshake.auth.version).split(".")[0]) !== this.apiVersion) {
+            if (socket.handshake.query.token !== clientToken) return socket.disconnect(true);
+            if (!(socket.handshake.query.version) || (parseInt((<string>socket.handshake.query.version).split(".")[0]) !== this.apiVersion)) {
                 socket.emit("outOfDate");
                 socket.disconnect(true);
                 return;
             }
+            if (!((typeof(socket.handshake.query.playerName) === "string") && (typeof(socket.handshake.query.version) === "string") && (typeof(socket.handshake.query.hostname) === "string"))) {
+                socket.disconnect(true);
+                return;
+            }
             const initSeeder:SeederData = {
-                username:socket.handshake.auth.playerName,
-                hostname:socket.handshake.auth.hostname,
-                stateBF4:socket.handshake.auth.hasBF4 ? "IDLE" : "UNOWNED",
-                stateBF1:socket.handshake.auth.hasBF1 ? "IDLE" : "UNOWNED",
-                targetBF4:emptyTarget,
-                targetBF1:emptyTarget,
-                lastUpdate:new Date().getTime(),
+                username:socket.handshake.query.playerName,
+                hostname:socket.handshake.query.hostname,
+                stateBF4:socket.handshake.query.hasBF4 ? GameState.IDLE : GameState.UNOWNED,
+                stateBF1:socket.handshake.query.hasBF1 ? GameState.IDLE : GameState.UNOWNED,
+                targetBF4:emptyTarget(),
+                targetBF1:emptyTarget(),
+                version:socket.handshake.query.version,
             };
             this.seeders.set(socket.id, initSeeder);
             this.frontEnd.emit("seederUpdate", socket.id, initSeeder);
             this.registerEventsBackend(socket);
         });
+        setInterval(this.serverCheck, 30000);
     }
     // Register events; called when sockets connect.
     private registerEventsFrontend(socket:socket.Socket) {
@@ -155,13 +170,18 @@ class Websockets {
             callback(JSON.stringify(this.seeders, Websockets.mapReplacer));
         });
         socket.on("setTarget", async (game, seeders:Array<string>, newTarget:string, callback) => {
-            if (typeof callback !== "function") return;
-            const success = await this.verifyAndSetTarget(game, seeders, newTarget, `${socket.request["session"].discordUser.username}#${socket.request["session"].discordUser.discriminator}`);
+            let success = true;
+            if (typeof callback !== "function") success = false;
+            if ((game !== "BF4") && (game !== "BF1")) success = false;
+            if (!isIterable(seeders)) success = false;
+            if (success) {
+                success = await this.verifyAndSetTarget(game, seeders, newTarget, `${socket.request["session"].discordUser.username}#${socket.request["session"].discordUser.discriminator}`);
+            }
             callback(success);
         });
         socket.on("restartOrigin", (seeders:Array<string>) => {
-            if (!isIterable(seeders)) return;
             for (const seederId of seeders) {
+                if (!isIterable(seeders)) return;
                 const targetSocket = this.backEnd.sockets.get(seederId);
                 if (!targetSocket) continue;
                 targetSocket.emit("restartOrigin", `${socket.request["session"].discordUser.username}#${socket.request["session"].discordUser.discriminator}`);
@@ -169,12 +189,13 @@ class Websockets {
         });
     }
     private registerEventsBackend(socket:socket.Socket) {
-        socket.on("gameStateUpdate", (game:string, newState:string) => {
+        socket.on("gameStateUpdate", (game:string, newState:GameState) => {
+            if (!Object.values(GameState).includes(GameState[game])) return;
             if (game === "BF4") {
                 this.seeders.get(socket.id)!.stateBF4 = newState;
             } else if (game === "BF1") {
                 this.seeders.get(socket.id)!.stateBF1 = newState;
-            }
+            } else return;
             this.frontEnd.emit("seederUpdate", socket.id, this.seeders.get(socket.id));
         });
         socket.on("disconnecting", () => {
@@ -206,6 +227,7 @@ class Websockets {
             }
             const newTargetObj:ServerData = {
                 "name": newTargetReq ? newTargetReq.context.server.name : null,
+                "gameId": newTargetReq ? newTargetReq.context.server.gameId : null,
                 "guid":newTarget,
                 "user":author,
                 "timestamp":new Date().getTime(),
@@ -234,9 +256,10 @@ class Websockets {
             }
             const newTargetObj:ServerData = {
                 "name": newTargetData ? newTargetData.prefix : null,
-                "guid":newTarget,
-                "user":author,
-                "timestamp":new Date().getTime(),
+                "gameId": newTarget,
+                "guid": null,
+                "user": author,
+                "timestamp": new Date().getTime(),
             };
             this.setTarget("BF1", seeders, newTargetObj);
             return true;
@@ -249,12 +272,61 @@ class Websockets {
         for (const seederId of seeders) {
             const targetSocket = this.backEnd.sockets.get(seederId);
             const targetSeeder = this.seeders.get(seederId);
-            if (!(targetSocket && targetSeeder && (targetSeeder[`state${game}`] !== "UNOWNED"))) continue;
+            if (!(targetSocket && targetSeeder && (targetSeeder[`state${game}`] !== GameState.UNOWNED))) continue;
             targetSeeder[`target${game}`] = newTarget;
             this.frontEnd.emit("seederUpdate", seederId, targetSeeder);
             targetSocket.emit("newTarget", game, newTarget);
         }
     }
+    private serverCheck = (async () => {
+        if (this.enableAuto) return;
+        for (const server of servers) {
+            const serverSeeders:Array<string> = [];
+            const emptySeeders:Array<string> = [];
+            let game;
+            if (server.guid && server.name) return;
+            if (!(server.guid || server.name)) return; // stupid check x2
+            if (server.guid) game = "BF4";
+            if (server.name) game = "BF1";
+            let bf1GameId:string | null = null;
+            let players = 0;
+            // Get server info first
+            if (game === "BF4") {
+                const teamInfo = (await (await fetch(`https://keeper.battlelog.com/snapshot/${server.guid}`)).json()).snapshot.teamInfo;
+                for (const team in teamInfo) {
+                    players = players + Object.keys(teamInfo[team].players).length;
+                }
+            }
+            if (game === "BF1") {
+                const serverReq = await fetch(`https://api.gametools.network/bf1/detailedserver?name=${server.name}`);
+                if (!serverReq.ok) {
+                    console.log(`Error fetching server information for server ${server.guid ? server.guid : server.name}.`);
+                }
+                const serverData = await serverReq.json();
+                players = serverData.playerAmount;
+                bf1GameId = serverData.gameId;
+            }
+            const currentDate = new Date();
+            const dayMinutes = currentDate.getUTCMinutes() + (currentDate.getUTCHours() * 60);
+            for (const [seederId, seeder] of this.seeders) {
+                if ((seeder.targetBF4.guid === server.guid) || (seeder.targetBF1.gameId === bf1GameId)) {
+                    serverSeeders.push(seederId);
+                }
+                if (((game === "BF4") && (seeder.targetBF4.gameId === null)) || ((game === "BF1") && (seeder.targetBF1.gameId === null))) {
+                    emptySeeders.push(seederId);
+                }
+            }
+            if ((server.deadIntervals[0] <= dayMinutes) && (players < server.emptyThreshold)) {
+                this.verifyAndSetTarget(game, serverSeeders, null, Websockets.autoName);
+                break;
+            }
+            if ((players < server.targetPlayers) && (emptySeeders.length > 0)) {
+                this.verifyAndSetTarget(game, emptySeeders.slice(0, (players - server.targetPlayers)), server.guid! || server.name!, Websockets.autoName);
+            } else if ((players > server.targetPlayers) && (emptySeeders.length > 0))  {
+                this.verifyAndSetTarget(game, serverSeeders.slice(0, (players - server.targetPlayers)), null, Websockets.autoName);
+            }
+        }
+    }).bind(this);
     public static mapReplacer(key, value) {
         if(value instanceof Map) {
             return {
@@ -274,6 +346,15 @@ function checkPermissions(session:ExpressSession.Session & Partial<ExpressSessio
     if ((!users.includes(session.discordUser.id))) return PermissionState.NOT_AUTHORIZED;
     return PermissionState.SUCCESS;
 }
+function emptyTarget():ServerData {
+    return {
+        "name":null,
+        "guid":null,
+        "gameId":null,
+        "user":"System",
+        "timestamp":new Date().getTime(),
+    };
+}
 function isIterable(obj) {
     // checks for null and undefined
     if (obj == null) {
@@ -285,9 +366,21 @@ function isIterable(obj) {
 // #region Watchers
 fs.watch(usersPath, async () => {
     const usersFile = await fs.promises.readFile(usersPath, {"encoding":"utf-8"});
-    users = JSON.parse(usersFile);
+    try {
+        users = JSON.parse(usersFile);
+    } catch {
+        // Who cares?
+    }
+});
+fs.watch(serversPath, async () => {
+    const serversFile = await fs.promises.readFile(usersPath, {"encoding":"utf-8"});
+    try {
+        servers = JSON.parse(serversFile);
+    } catch {
+    // Who cares?
+    }
 });
 // #endregion
-new Websockets(httpServer, sessionMiddleware, checkPermissions, config.clientToken);
+const sockets = new Websockets(httpServer, sessionMiddleware, checkPermissions, config.clientToken);
 httpServer.listen(config.webPort);
 console.log(`WebServer listening on port ${config.webPort}`);
