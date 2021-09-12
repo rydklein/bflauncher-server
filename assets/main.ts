@@ -1,4 +1,5 @@
 type SeederData = import("../commonTypes").SeederData;
+type AutomationStatus = import("../commonTypes").AutomationStatus;
 type Socket = import("socket.io-client").Socket;
 declare function io(path);
 declare const sorttable;
@@ -7,6 +8,7 @@ let statusTimeout:ReturnType<typeof setTimeout> | null;
 const guidRegex = new RegExp("^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$");
 let mouseDown = false;
 let lastServerId = "";
+let autoEnabled;
 // #region Seeder Display
 // #region Table Utils
 enum TableFields {
@@ -23,6 +25,10 @@ enum GameState {
     "JOINING",
     "ACTIVE",
 }
+enum BFGame {
+    "BF4",
+    "BF1",
+}
 const stateColor = {
     0: "#7f8c8d",
     1: "#e74c3c",
@@ -31,6 +37,7 @@ const stateColor = {
     4: "#2ecc71",
 };
 function setSeeder(seederId:string, seederData:SeederData) {
+    if (!socket.connected) return;
     let row = document.getElementById(seederId) as HTMLTableRowElement;
     if (!row) {
         const table = document.getElementById("seeders")!.getElementsByTagName("tbody")[0];
@@ -89,6 +96,9 @@ socket.on("connect", () => {
             setSeeder(mapKey, mapValue);
         }
     });
+    socket.emit("getAuto", (autoStatus:AutomationStatus) => {
+        updateAutoButton(autoStatus);
+    });
 });
 socket.on("disconnect", () => {
     for (const row of document.getElementById("seeders")!.getElementsByTagName("tbody")[0].children)  {
@@ -103,6 +113,27 @@ socket.on("seederGone", (seederId:string) => {
     removeSeeder(seederId);
     updateSeederCount();
 });
+socket.on("autoUpdate", (autoStatus:AutomationStatus) => {
+    updateAutoButton(autoStatus);
+});
+socket.on("autoAssignment", console.log);
+// #endregion
+// #region Controls
+function updateAutoButton(autoStatus:AutomationStatus) {
+    const autoButton = document.getElementById("autoToggle") as HTMLInputElement;
+    const manualText = document.getElementById("manualControlsTitle") as HTMLHeadingElement;
+    autoButton.disabled = false;
+    autoButton.innerText = autoStatus.enabled ? "ENABLED" : "DISABLED";
+    autoButton.title = `${new Date(autoStatus.timestamp).toLocaleString()}
+    ${autoStatus.user}`;
+    const manualControls = document.getElementById("manualControls") as HTMLDivElement;
+    for (const child of manualControls.children) {
+        if (typeof(child["disabled"]) === "undefined") continue;
+        child["disabled"] = autoStatus.enabled;
+    }
+    autoEnabled = autoStatus.enabled;
+    manualText.innerText = autoStatus.enabled ? "Manual Controls (DISABLED)" : "Manual Controls";
+}
 // #endregion
 // #region Input
 // Executed on load and when game dropdown is changed. Changes game-specific instructions.
@@ -111,14 +142,14 @@ async function sendMachinesToServer() {
     const targetInput = document.getElementById("newTargetInput") as HTMLInputElement;
     const statusText = document.getElementById("newTargetStatus") as HTMLInputElement;
     const game = (<HTMLInputElement>document.getElementById("game")).value;
-    if (game === "BF4") {
+    if (parseInt(game) === BFGame.BF4) {
         if (!guidRegex.test(targetInput.value)) {
             statusText.innerText = "Input is not a valid GUID.";
             showStatusText();
             return;
         }
     }
-    if (game === "BF1") {
+    if (parseInt(game) === BFGame.BF1) {
         if (!((targetInput.value.length === 13) && !(isNaN(parseInt(targetInput.value))))) {
             statusText.innerText = "Input is not a valid Game ID";
             showStatusText();
@@ -132,7 +163,7 @@ async function sendMachinesToServer() {
     }
     const setSuccess = await (() => {
         return new Promise((resolve) => {
-            socket.emit("setTarget", game, getCheckedSeeders(), targetInput.value, (success) => {
+            socket.emit("setTarget", parseInt(game), getCheckedSeeders(), targetInput.value, (success) => {
                 resolve(success);
             });
         });
@@ -147,7 +178,7 @@ async function sendMachinesToServer() {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function disconnectFromServer() {
     const statusText = document.getElementById("newTargetStatus")!;
-    const game = (<HTMLInputElement>document.getElementById("game")).value;
+    const game = parseInt((<HTMLInputElement>document.getElementById("game")).value);
     if (!getCheckedSeeders()[0]) {
         statusText.innerText = "Please select one or more bot(s).";
     } else {
@@ -210,6 +241,10 @@ function restartOrigin() {
         socket.emit("restartOrigin", checkedSeeders);
     }
     showStatusText();
+}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function autoToggleHandler(element:HTMLInputElement) {
+    socket.emit("setAuto", !autoEnabled);
 }
 // #endregion
 // #region Event Listeners

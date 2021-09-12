@@ -24,56 +24,61 @@
         https://battlelog.battlefield.com/bf4/servers/show/pc/<b
             style="color: #27ae60">899420dc-e958-4048-b4c2-27ae76bfeed5</b>/Worst-Hitreg-Global<br>
         <br>
-        <a href="https://gametools.network/servers?game=bf1&region=all&platform=pc" target="_blank">BF1 Server IDs</a><br>
+        <a href="https://gametools.network/servers?game=bf1&region=all&platform=pc" target="_blank">BF1 Server
+            IDs</a><br>
         Search for your server, click on it, the server id is in the
         URL.<br>https://gametools.network/servers/bf1/gameid/<b style="color: #27ae60">1234567899999</b>/pc
     </div>
     <div>
         <h3>Control</h3>
-        Please enter the <span id="serverIDDesc">Server GUID</span> to seed.<br>
-        <input type="text" id="newTargetInput" autocomplete="off" placeholder="Server GUID"
-            onkeypress="return event.keyCode != 13;"> <select id="game" name="game" onchange="gameListener()">
-            <option selected value="BF4">BF4</option>
-            <option value="BF1">BF1</option>
-        </select>
-        <br>
-        <button id="newTargetSubmit" onclick="sendMachinesToServer()">Submit</button>
-        <button id="disconnect" onclick="disconnectFromServer()">Disconnect</button><br>
+        <h4 id="manualControlsTitle">Manual Controls</h4>
+        <div id="manualControls">
+            Please enter the <span id="serverIDDesc">Server GUID</span> to seed.<br>
+            <input type="text" id="newTargetInput" autocomplete="off" placeholder="Server GUID"
+                onkeypress="return event.keyCode != 13;" disabled="true"> <select id="game" name="game"
+                onchange="gameListener()" disabled="true">
+                <!-- These will need to be changed if I ever update the BFGame enum. -->
+                <option selected value=0>BF4</option>
+                <option value=1>BF1</option>
+            </select>
+            <br>
+            <button id="newTargetSubmit" onclick="sendMachinesToServer()" disabled="true">Submit</button>
+            <button id="disconnect" onclick="disconnectFromServer()" disabled="true">Disconnect</button><br>
+            <span id="newTargetStatus" hidden=true></span>
+        </div>
         <button onclick="restartOrigin()" style="background-color:#e74c3c;color:white">Restart Origin</button><br>
-        <span id="newTargetStatus" hidden=true></span><br>
+        <div id="automationControls">
+            <h4>Automation Status</h4>
+            <button id="autoToggle" onclick=autoToggleHandler() disabled="true">Loading...</button>
+        </div>
     </div>
     <div id="controls">
-    <div class="seederList">
-    <h4>Seeder Clients (<span id=seederCount>0</span>)</h4>
-    <table id="seeders" class="sortable">
-        <thead>
-            <tr>
-                <th class="sorttable_nosort"><input type="checkbox" onchange="checkAllMachines(this)" /> </th>
-                <th id="mColumn">Machine Name</th>
-                <th>Account Name</th>
-                <th>Target (BF4)</th>
-                <th>Target (BF1)</th>
-            </tr>
-        </thead>
-        <tbody>
-        </tbody>
+        <div class="seederList">
+            <h4>Seeder Clients (<span id=seederCount>0</span>)</h4>
+            <table id="seeders" class="sortable">
+                <thead>
+                    <tr>
+                        <th class="sorttable_nosort"><input type="checkbox" onchange="checkAllMachines(this)" /> </th>
+                        <th id="mColumn">Machine Name</th>
+                        <th>Account Name</th>
+                        <th>Target (BF4)</th>
+                        <th>Target (BF1)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
         </div>
-    </table>
-    <div class="coloredBack">
-        <span style="background-color:#e74c3c">IDLE</span>
-        <span style="background-color:#f39c12">LAUNCHING</span>
-        <span style="background-color:#f1c40f">JOINING</span>
-        <span style="background-color:#2ecc71">ACTIVE</span>
-        <span style="background-color:#7f8c8d">UNOWNED</span>
+        </table>
+        <div class="coloredBack">
+            <span style="background-color:#e74c3c">IDLE</span>
+            <span style="background-color:#f39c12">LAUNCHING</span>
+            <span style="background-color:#f1c40f">JOINING</span>
+            <span style="background-color:#2ecc71">ACTIVE</span>
+            <span style="background-color:#7f8c8d">UNOWNED</span>
+        </div>
+        <span>Mouse over the target cells for more information about the target.</span>
     </div>
-    <span>Mouse over the target cells for more information about the target.</span>
-</div>
-<div class="automationControls">
-    <h4>Automation Status</h4>
-    <span id="autoStatus">Loading...</span>
-    <button id="autoToggle">Loading...</button>
-</div>
-</div>
+    </div>
 </body>
 
 </html>
