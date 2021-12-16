@@ -31,26 +31,21 @@
     </div>
     <div>
         <h3>Control</h3>
-        <h4 id="manualControlsTitle">Manual Controls</h4>
         <div id="manualControls">
             Please enter the <span id="serverIDDesc">Server GUID</span> to seed.<br>
             <input type="text" id="newTargetInput" autocomplete="off" placeholder="Server GUID"
-                onkeypress="return event.keyCode != 13;" disabled="true"> <select id="game" name="game"
-                onchange="gameListener()" disabled="true">
+                onkeypress="return event.keyCode != 13;"> <select id="game" name="game"
+                onchange="gameListener()">
                 <!-- These will need to be changed if I ever update the BFGame enum. -->
                 <option selected value=0>BF4</option>
                 <option value=1>BF1</option>
             </select>
             <br>
-            <button id="newTargetSubmit" onclick="sendMachinesToServer()" disabled="true">Submit</button>
-            <button id="disconnect" onclick="disconnectFromServer()" disabled="true">Disconnect</button><br>
+            <button id="newTargetSubmit" onclick="sendMachinesToServer()">Submit</button>
+            <button id="disconnect" onclick="disconnectFromServer()">Disconnect</button><br>
             <span id="newTargetStatus" hidden=true></span>
         </div>
         <button onclick="restartOrigin()" style="background-color:#e74c3c;color:white">Restart Origin</button><br>
-        <div id="automationControls">
-            <h4>Automation Status</h4>
-            <button id="autoToggle" onclick=autoToggleHandler() disabled="true">Loading...</button>
-        </div>
     </div>
     <div id="controls">
         <div class="seederList">

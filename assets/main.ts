@@ -1,5 +1,4 @@
 type SeederData = import("../commonTypes").SeederData;
-type AutomationStatus = import("../commonTypes").AutomationStatus;
 type Socket = import("socket.io-client").Socket;
 declare function io(path);
 declare const sorttable;
@@ -8,7 +7,6 @@ let statusTimeout:ReturnType<typeof setTimeout> | null;
 const guidRegex = new RegExp("^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$");
 let mouseDown = false;
 let lastServerId = "";
-let autoEnabled;
 // #region Seeder Display
 // #region Table Utils
 enum TableFields {
@@ -96,9 +94,6 @@ socket.on("connect", () => {
             setSeeder(mapKey, mapValue);
         }
     });
-    socket.emit("getAuto", (autoStatus:AutomationStatus) => {
-        updateAutoButton(autoStatus);
-    });
 });
 socket.on("disconnect", () => {
     for (const row of document.getElementById("seeders")!.getElementsByTagName("tbody")[0].children)  {
@@ -113,27 +108,6 @@ socket.on("seederGone", (seederId:string) => {
     removeSeeder(seederId);
     updateSeederCount();
 });
-socket.on("autoUpdate", (autoStatus:AutomationStatus) => {
-    updateAutoButton(autoStatus);
-});
-socket.on("autoAssignment", console.log);
-// #endregion
-// #region Controls
-function updateAutoButton(autoStatus:AutomationStatus) {
-    const autoButton = document.getElementById("autoToggle") as HTMLInputElement;
-    const manualText = document.getElementById("manualControlsTitle") as HTMLHeadingElement;
-    autoButton.disabled = false;
-    autoButton.innerText = autoStatus.enabled ? "ENABLED" : "DISABLED";
-    autoButton.title = `${new Date(autoStatus.timestamp).toLocaleString()}
-    ${autoStatus.user}`;
-    const manualControls = document.getElementById("manualControls") as HTMLDivElement;
-    for (const child of manualControls.children) {
-        if (typeof(child["disabled"]) === "undefined") continue;
-        child["disabled"] = autoStatus.enabled;
-    }
-    autoEnabled = autoStatus.enabled;
-    manualText.innerText = autoStatus.enabled ? "Manual Controls (DISABLED)" : "Manual Controls";
-}
 // #endregion
 // #region Input
 // Executed on load and when game dropdown is changed. Changes game-specific instructions.
@@ -194,11 +168,12 @@ function gameListener() {
     const bf1ServerIdentifier = "Game ID";
     const targetIDInput = document.getElementById("newTargetInput") as HTMLInputElement;
     const lastServerIdTemp = targetIDInput.value;
-    const value = (<HTMLInputElement>document.getElementById("game")).value;
-    if (value === "BF4") {
+    const value = parseInt((<HTMLInputElement>document.getElementById("game")).value);
+    // BFGame Enum
+    if (value === BFGame["BF4"]) {
         targetIDInput.placeholder = bf4ServerIdentifier;
     }
-    if (value === "BF1") {
+    if (value === BFGame["BF1"]) {
         targetIDInput.placeholder = bf1ServerIdentifier;
     }
     targetIDInput.value = lastServerId;
@@ -241,10 +216,6 @@ function restartOrigin() {
         socket.emit("restartOrigin", checkedSeeders);
     }
     showStatusText();
-}
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function autoToggleHandler(element:HTMLInputElement) {
-    socket.emit("setAuto", !autoEnabled);
 }
 // #endregion
 // #region Event Listeners
