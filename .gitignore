@@ -75,6 +75,8 @@ typings/
 # FuseBox cache
 .fusebox/
 # Other Stuff
+apidocs.*
+!apidocs.md
 *.js
 !assets/sorttable.js
 config/

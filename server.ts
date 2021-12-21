@@ -28,7 +28,7 @@ enum BFGame {
 }
 interface APIUser {
     username:string,
-    ip:string,
+    ips:Array<string>,
     token:string
 }
 interface APISeeder extends SeederData {
@@ -45,6 +45,7 @@ declare module "express-session" {
 const config = JSON.parse(fs.readFileSync("./config/config.json", {"encoding":"utf-8"}));
 const guidRegex = new RegExp("^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$");
 const webInterface = express();
+webInterface.set("trust proxy", ["loopback", "linklocal", "uniquelocal"]);
 webInterface.use(express.json());
 webInterface.use(express.urlencoded({ extended: true }));
 const httpServer = http.createServer(webInterface);
@@ -340,18 +341,17 @@ function checkPermsPanel(session:ExpressSession.Session & Partial<ExpressSession
     return PermissionState.SUCCESS;
 }
 function checkPermsAPI(req:express.Request, res:express.Response):APIUser | null {
-    const reqIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-    if(!(apiUsers.find(e => (e.ip == reqIp)))) {
-        console.log("Unauthorized IP: " + reqIp);
-        res.status(403).send("Unauthorized IP " + (reqIp));
+    if(!(apiUsers.find(e => (e.ips.includes(req.ip))))) {
+        console.log("Unauthorized IP: " + req.ip);
+        res.status(403).send("Unauthorized IP " + (req.ip));
         return null;
     }
     if (!req.headers.authorization) {
         res.status(401).send("No token");
         return null;
     }
-    if(!(apiUsers.find(e => (e.ip == reqIp))!.token == req.headers.authorization)) {
-        console.log("Unauthorized Token by address " + reqIp);
+    if(!(apiUsers.find(e => (e.ips.includes(req.ip)))!.token == req.headers.authorization)) {
+        console.log("Unauthorized Token by address " + req.ip);
         res.status(403).send("Invalid token");
         return null;
     }
