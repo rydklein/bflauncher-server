@@ -26,15 +26,33 @@ enum BFGame {
     "BF4",
     "BF1",
 }
+interface APIUser {
+    username:string,
+    ip:string,
+    token:string
+}
+interface APISeeder extends SeederData {
+    id:string
+}
+declare module "express-session" {
+    export interface SessionData {
+      bearer_token:string,
+      discordUser:Record<string, any>,
+    }
+  }
 //#endregion
 // Global Variables
 const config = JSON.parse(fs.readFileSync("./config/config.json", {"encoding":"utf-8"}));
 const guidRegex = new RegExp("^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$");
 const webInterface = express();
+webInterface.use(express.json());
+webInterface.use(express.urlencoded({ extended: true }));
 const httpServer = http.createServer(webInterface);
 // #region Startup
-const usersPath = "./config/users.json";
-let users:Array<string> = JSON.parse(fs.readFileSync(usersPath, {"encoding":"utf-8"}));
+const panelUsersPath = "./config/panelusers.json";
+const apiUsersPath = "./config/apiusers.json";
+let panelUsers:Array<string> = JSON.parse(fs.readFileSync(panelUsersPath, {"encoding":"utf-8"}));
+let apiUsers:Array<APIUser> = JSON.parse(fs.readFileSync(apiUsersPath, {"encoding":"utf-8"}));
 // #endregion
 const sessionStorage = MemoryStore(ExpressSession);
 const sessionConfig = {
@@ -52,10 +70,10 @@ const sessionConfig = {
 const sessionMiddleware = ExpressSession(sessionConfig);
 const oAuthLoginUrl = `https://discord.com/api/oauth2/authorize?client_id=${config.oauth2.client_id}&redirect_uri=${encodeURIComponent(config.oauth2.redirect_uri)}&response_type=code&scope=${encodeURIComponent(config.oauth2.scopes.join(" "))}`;
 webInterface.use(sessionMiddleware);
-// #region HTTP
+// #region Main Site
 webInterface.get("/", async (req, res) => {
     // If not logged in, redirect to login page.
-    const userData = checkPermissions(req.session);
+    const userData = checkPermsPanel(req.session);
     if (userData === PermissionState.NOT_LOGGED_IN) return res.redirect("/login");
     if (userData === PermissionState.NOT_AUTHORIZED) return res.redirect("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
     res.sendFile(path.join(__dirname, "/assets/control.html"));
@@ -87,25 +105,55 @@ webInterface.get("/login", (req, res) => {
 });
 // Assets
 webInterface.get("/assets/main.js", async (req, res) => {
-    const userData = checkPermissions(req.session);
+    const userData = checkPermsPanel(req.session);
     if (userData === PermissionState.NOT_LOGGED_IN) return res.status(401).send();
     if (userData === PermissionState.NOT_AUTHORIZED) return res.status(403).send();
     res.set("Content-Type", "text/javascript");
     res.sendFile(path.join(__dirname, "/assets/main.js")); 
 });
 webInterface.get("/assets/sorttable.js", async (req, res) => {
-    const userData = checkPermissions(req.session);
+    const userData = checkPermsPanel(req.session);
     if (userData === PermissionState.NOT_LOGGED_IN) return res.status(401).send();
     if (userData === PermissionState.NOT_AUTHORIZED) return res.status(403).send();
     res.set("Content-Type", "text/javascript");
     res.sendFile(path.join(__dirname, "/assets/sorttable.js")); 
 });
 webInterface.get("/assets/main.css", async (req, res) => {
-    const userData = checkPermissions(req.session);
+    const userData = checkPermsPanel(req.session);
     if (userData === PermissionState.NOT_LOGGED_IN) return res.status(401).send();
     if (userData === PermissionState.NOT_AUTHORIZED) return res.status(403).send();
     res.set("Content-Type", "text/css");
     res.sendFile(path.join(__dirname, "/assets/main.css")); 
+});
+// #endregion
+// #region API
+webInterface.get("/api/getSeeders", async (req, res) => {
+    const apiUser = checkPermsAPI(req, res);
+    if (!apiUser) return;
+    const apiSeeders:Array<APISeeder> = [];
+    for (const [key, value] of seeders) {
+        const newSeeder:any = {};
+        Object.assign(newSeeder, value);
+        newSeeder.id = key;
+        apiSeeders.push(newSeeder);
+    }
+    res.json(apiSeeders);
+});
+webInterface.post("/api/sendSeeders", async (req, res) => {
+    const apiUser = checkPermsAPI(req, res);
+    if (!apiUser) return;
+    if (!req.body) {
+        res.status(400).send("Missing body");
+        return;
+    }
+    if (typeof req.body === "object" && req.body !== null && (req.body.game !== undefined) && req.body.seeders) {
+        if (Array.isArray(req.body.seeders) && typeof req.body.game === "number") {
+            const success = await verifyAndSetTarget(req.body.game, req.body.seeders, req.body.target, apiUser.username);
+            res.status(200).send(success);
+            return;
+        }
+    }
+    res.status(400).send("Invalid body");
 });
 // #endregion
 // #region Websockets
@@ -125,7 +173,7 @@ backEnd.use(checkAuthBackend);
 backEnd.use(registerSocketBackend);
 function checkAuthFrontend(socket:socket.Socket, next) {
     const socketSession = socket.request["session"] as ExpressSession.Session & Partial<ExpressSession.SessionData>;
-    const permsResult = checkPermissions(socketSession);
+    const permsResult = checkPermsPanel(socketSession);
     if(permsResult !== PermissionState.SUCCESS) {
         next(new Error(PermissionState[permsResult]));
     } else {
@@ -203,7 +251,7 @@ async function verifyAndSetTarget(game:BFGame, seeders:Array<string>, newTarget:
     author = author || "System";
     if (game === BFGame.BF4) {
         let newTargetReq;
-        if (newTarget) {
+        if (newTarget != null) {
             if (!guidRegex.test(newTarget)) {
                 return false;
             }
@@ -286,10 +334,28 @@ function mapReplacer(key, value) {
 
 // #endregion
 // #region Helpers
-function checkPermissions(session:ExpressSession.Session & Partial<ExpressSession.SessionData>):PermissionState {
+function checkPermsPanel(session:ExpressSession.Session & Partial<ExpressSession.SessionData>):PermissionState {
     if (!((session.bearer_token) && (session.discordUser))) return PermissionState.NOT_LOGGED_IN;
-    if ((!users.includes(session.discordUser.id))) return PermissionState.NOT_AUTHORIZED;
+    if ((!panelUsers.includes(session.discordUser.id))) return PermissionState.NOT_AUTHORIZED;
     return PermissionState.SUCCESS;
+}
+function checkPermsAPI(req:express.Request, res:express.Response):APIUser | null {
+    const reqIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    if(!(apiUsers.find(e => (e.ip == reqIp)))) {
+        console.log("Unauthorized IP: " + reqIp);
+        res.status(403).send("Unauthorized IP " + (reqIp));
+        return null;
+    }
+    if (!req.headers.authorization) {
+        res.status(401).send("No token");
+        return null;
+    }
+    if(!(apiUsers.find(e => (e.ip == reqIp))!.token == req.headers.authorization)) {
+        console.log("Unauthorized Token by address " + reqIp);
+        res.status(403).send("Invalid token");
+        return null;
+    }
+    return apiUsers.find(e => (e.token == req.headers.authorization))!;
 }
 function emptyTarget():ServerData {
     return {
@@ -309,10 +375,26 @@ function isIterable(obj) {
 }
 // #endregion
 // #region Watchers
-fs.watch(usersPath, async () => {
-    const usersFile = await fs.promises.readFile(usersPath, {"encoding":"utf-8"});
+fs.watch(panelUsersPath, async () => {
+    const usersFile = await fs.promises.readFile(panelUsersPath, {"encoding":"utf-8"});
     try {
-        users = JSON.parse(usersFile);
+        panelUsers = JSON.parse(usersFile);
+    } catch {
+        // Who cares?
+    }
+});
+fs.watch(panelUsersPath, async () => {
+    const usersFile = await fs.promises.readFile(panelUsersPath, {"encoding":"utf-8"});
+    try {
+        panelUsers = JSON.parse(usersFile);
+    } catch {
+        // Who cares?
+    }
+});
+fs.watch(apiUsersPath, async () => {
+    const usersFile = await fs.promises.readFile(panelUsersPath, {"encoding":"utf-8"});
+    try {
+        apiUsers = JSON.parse(usersFile);
     } catch {
         // Who cares?
     }

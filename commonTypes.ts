@@ -14,12 +14,6 @@ export interface ServerData {
     "user":string,
     "timestamp":number
 }
-
-export interface AutomationStatus {
-    "enabled":boolean,
-    "user":string,
-    "timestamp":number
-}
 enum GameState {
     "UNOWNED",
     "IDLE",

@@ -75,8 +75,6 @@ typings/
 # FuseBox cache
 .fusebox/
 # Other Stuff
-config.json
-users.json
 *.js
 !assets/sorttable.js
-config/servers.json
+config/
