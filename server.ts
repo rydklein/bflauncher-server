@@ -1,7 +1,7 @@
 // Imports
 import http from "http";
 import express from "express";
-import { SeederData, ServerData } from "./commonTypes";
+import { SeederData, ServerData, AutomationStatus } from "./commonTypes";
 import * as fs from "fs";
 import ExpressSession from "express-session";
 import FormData from "form-data";
@@ -140,6 +140,11 @@ webInterface.get("/api/getSeeders", async (req, res) => {
     }
     res.json(apiSeeders);
 });
+webInterface.get("/api/getAuto", async (req, res) => {
+    const apiUser = checkPermsAPI(req, res);
+    if (!apiUser) return;
+    res.json(autoStatus);
+});
 webInterface.post("/api/sendSeeders", async (req, res) => {
     const apiUser = checkPermsAPI(req, res);
     if (!apiUser) return;
@@ -164,6 +169,11 @@ const apiVersion:number = parseInt(JSON.parse(fs.readFileSync("./version.json", 
 const io:socket.Server = new socket.Server(httpServer);
 const frontEnd:socket.Namespace = io.of("/ws/web");
 const backEnd:socket.Namespace = io.of("/ws/seeder");
+let autoStatus:AutomationStatus = {
+    "enabled":false,
+    "user":"SYSTEM",
+    "timestamp":new Date().getTime(),
+};
 frontEnd.use((socket, next) => {
     sessionMiddleware(socket.request as any, {} as any, next as any);
 });
@@ -186,6 +196,10 @@ function registerSocketFrontend(socket:socket.Socket, next) {
         if (typeof callback !== "function") return;
         callback(JSON.stringify(seeders, mapReplacer));
     });
+    socket.on("getAuto", (callback) => {
+        if (typeof callback !== "function") return;
+        callback(autoStatus);
+    });
     socket.on("setTarget", async (game:BFGame, seeders:Array<string>, newTarget:string, callback) => {
         let success = true;
         if (typeof callback !== "function") success = false;
@@ -203,6 +217,15 @@ function registerSocketFrontend(socket:socket.Socket, next) {
             if (!targetSocket) continue;
             targetSocket.emit("restartOrigin", `${socket.request["session"].discordUser.username}#${socket.request["session"].discordUser.discriminator}`);
         }
+    });
+    -    socket.on("setAuto", (enabled) => {
+        if (typeof(enabled) !== "boolean") return;
+        autoStatus = {
+            "enabled":enabled,
+            "user":`${socket.request["session"].discordUser.username}#${socket.request["session"].discordUser.discriminator}`,
+            "timestamp":new Date().getTime(),
+        };
+        frontEnd.emit("autoUpdate", autoStatus);
     });
     next();
 }
@@ -383,16 +406,8 @@ fs.watch(panelUsersPath, async () => {
         // Who cares?
     }
 });
-fs.watch(panelUsersPath, async () => {
-    const usersFile = await fs.promises.readFile(panelUsersPath, {"encoding":"utf-8"});
-    try {
-        panelUsers = JSON.parse(usersFile);
-    } catch {
-        // Who cares?
-    }
-});
 fs.watch(apiUsersPath, async () => {
-    const usersFile = await fs.promises.readFile(panelUsersPath, {"encoding":"utf-8"});
+    const usersFile = await fs.promises.readFile(apiUsersPath, {"encoding":"utf-8"});
     try {
         apiUsers = JSON.parse(usersFile);
     } catch {

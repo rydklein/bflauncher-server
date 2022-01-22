@@ -1,3 +1,8 @@
+export interface AutomationStatus {
+    "enabled":boolean,
+    "user":string,
+    "timestamp":number
+}
 export interface SeederData {
     username:string
     hostname:string,

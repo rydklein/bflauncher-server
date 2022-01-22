@@ -1,3 +1,4 @@
+type AutomationStatus = import("../commonTypes").AutomationStatus;
 type SeederData = import("../commonTypes").SeederData;
 type Socket = import("socket.io-client").Socket;
 declare function io(path);
@@ -5,6 +6,7 @@ declare const sorttable;
 const socket:Socket = io("/ws/web");
 let statusTimeout:ReturnType<typeof setTimeout> | null;
 const guidRegex = new RegExp("^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$");
+let autoEnabled = false;
 let mouseDown = false;
 let lastServerId = "";
 // #region Seeder Display
@@ -94,6 +96,9 @@ socket.on("connect", () => {
             setSeeder(mapKey, mapValue);
         }
     });
+    socket.emit("getAuto", (autoStatus:AutomationStatus) => {
+        updateAutoButton(autoStatus);
+    });
 });
 socket.on("disconnect", () => {
     for (const row of document.getElementById("seeders")!.getElementsByTagName("tbody")[0].children)  {
@@ -108,6 +113,10 @@ socket.on("seederGone", (seederId:string) => {
     removeSeeder(seederId);
     updateSeederCount();
 });
+socket.on("autoUpdate", (autoStatus:AutomationStatus) => {
+    updateAutoButton(autoStatus);
+});
+socket.on("autoAssignment", console.log);
 // #endregion
 // #region Input
 // Executed on load and when game dropdown is changed. Changes game-specific instructions.
@@ -216,6 +225,18 @@ function restartOrigin() {
         socket.emit("restartOrigin", checkedSeeders);
     }
     showStatusText();
+}
+function updateAutoButton(autoStatus:AutomationStatus) {
+    const autoButton = document.getElementById("autoToggle") as HTMLInputElement;
+    autoButton.disabled = false;
+    autoButton.innerText = autoStatus.enabled ? "ENABLED" : "DISABLED";
+    autoButton.title = `${new Date(autoStatus.timestamp).toLocaleString()}
+    ${autoStatus.user}`;
+    autoEnabled = autoStatus.enabled;
+}
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function autoToggleHandler(element:HTMLInputElement) {
+    socket.emit("setAuto", !autoEnabled);
 }
 // #endregion
 // #region Event Listeners

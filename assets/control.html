@@ -1,5 +1,5 @@
+<!DOCTYPE html>
 <html>
-
 <head>
     <title>Seeder Control Panel</title>
     <meta name="format-detection" content="telephone=no">
@@ -31,6 +31,10 @@
     </div>
     <div>
         <h3>Control</h3>
+        <div id="automationControls">
+            <h4>Automation Status</h4>
+            <button id="autoToggle" onclick=autoToggleHandler() disabled="true">Loading...</button>
+        </div><br>
         <div id="manualControls">
             Please enter the <span id="serverIDDesc">Server GUID</span> to seed.<br>
             <input type="text" id="newTargetInput" autocomplete="off" placeholder="Server GUID"
