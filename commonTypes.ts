@@ -14,10 +14,15 @@ export interface SeederData {
 }
 export interface ServerData {
     "name":string | null,
+    "game":BFGame,
     "guid":string | null,
     "gameId":string | null;
     "user":string,
     "timestamp":number
+}
+export enum BFGame {
+    "BF4",
+    "BF1",
 }
 enum GameState {
     "UNOWNED",

@@ -1,7 +1,7 @@
 // Imports
 import http from "http";
 import express from "express";
-import { SeederData, ServerData, AutomationStatus } from "./commonTypes";
+import { SeederData, ServerData, AutomationStatus, BFGame } from "./commonTypes";
 import * as fs from "fs";
 import ExpressSession from "express-session";
 import FormData from "form-data";
@@ -21,10 +21,6 @@ enum GameState {
     "LAUNCHING",
     "JOINING",
     "ACTIVE",
-}
-enum BFGame {
-    "BF4",
-    "BF1",
 }
 interface APIUser {
     username:string,
@@ -250,8 +246,8 @@ function registerSocketBackend(socket:socket.Socket, next) {
         hostname:socket.handshake.query.hostname,
         stateBF4:(socket.handshake.query.hasBF4 === "true") ? GameState.IDLE : GameState.UNOWNED,
         stateBF1:(socket.handshake.query.hasBF1 === "true") ? GameState.IDLE : GameState.UNOWNED,
-        targetBF4:emptyTarget(),
-        targetBF1:emptyTarget(),
+        targetBF4:emptyTarget(BFGame.BF4),
+        targetBF1:emptyTarget(BFGame.BF1),
         version:socket.handshake.query.version,
     };
     seeders.set(socket.id, initSeeder);
@@ -268,6 +264,7 @@ function registerSocketBackend(socket:socket.Socket, next) {
         frontEnd.emit("seederGone", socket.id);
         seeders.delete(socket.id);
     });
+    frontEnd.emit("seederUpdate", socket.id, seeders.get(socket.id));
     next();
 }
 // Verify target is real, and then set it. Returns true if successful, false if not.
@@ -294,12 +291,13 @@ async function verifyAndSetTarget(game:BFGame, seeders:Array<string>, newTarget:
         }
         const newTargetObj:ServerData = {
             "name": newTargetReq ? newTargetReq.context.server.name : null,
+            "game": BFGame.BF4,
             "gameId": newTargetReq ? newTargetReq.context.server.gameId : null,
             "guid":newTarget,
             "user":author,
             "timestamp":new Date().getTime(),
         };
-        setTarget(BFGame.BF4, seeders, newTargetObj);
+        setTarget(seeders, newTargetObj);
         return true;
     }
     if (game === BFGame.BF1) {
@@ -323,26 +321,27 @@ async function verifyAndSetTarget(game:BFGame, seeders:Array<string>, newTarget:
         }
         const newTargetObj:ServerData = {
             "name": newTargetData ? newTargetData.prefix : null,
+            "game": BFGame.BF1,
             "gameId": newTarget,
             "guid": null,
             "user": author,
             "timestamp": new Date().getTime(),
         };
-        setTarget(game, seeders, newTargetObj);
+        setTarget(seeders, newTargetObj);
         return true;
     }
     return false;
 }
 // Set target, without any kind of verification.
-function setTarget(game:BFGame, targetSeeders:Array<string>, newTarget:ServerData) {
+function setTarget(targetSeeders:Array<string>, newTarget:ServerData) {
     if (!isIterable(targetSeeders)) return;
     for (const seederId of targetSeeders) {
         const targetSocket = backEnd.sockets.get(seederId);
         const targetSeeder = seeders.get(seederId);
-        if (!(targetSocket && targetSeeder && (targetSeeder[`state${BFGame[game]}`] !== GameState.UNOWNED))) continue;
-        targetSeeder[`target${BFGame[game]}`] = newTarget;
+        if (!(targetSocket && targetSeeder && (targetSeeder[`state${BFGame[newTarget.game]}`] !== GameState.UNOWNED))) continue;
+        targetSeeder[`target${BFGame[newTarget.game]}`] = newTarget;
         frontEnd.emit("seederUpdate", seederId, targetSeeder);
-        targetSocket.emit("newTarget", game, newTarget);
+        targetSocket.emit("newTarget", newTarget);
     }
 }
 function mapReplacer(key, value) {
@@ -380,9 +379,10 @@ function checkPermsAPI(req:express.Request, res:express.Response):APIUser | null
     }
     return apiUsers.find(e => (e.token == req.headers.authorization))!;
 }
-function emptyTarget():ServerData {
+function emptyTarget(game:BFGame):ServerData {
     return {
         "name":null,
+        "game":BFGame.BF4,
         "guid":null,
         "gameId":null,
         "user":"System",
